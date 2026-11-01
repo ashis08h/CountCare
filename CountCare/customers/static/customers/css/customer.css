@@ -1,0 +1,39 @@
+
+body {
+    background-color: #f5f6fa;
+    font-family: Arial, sans-serif;
+}
+
+.card {
+    border: none;
+    border-radius: 10px;
+}
+
+.card-header {
+    background-color: #ffffff;
+    padding: 16px;
+}
+
+.form-label {
+    font-weight: 600;
+}
+
+.table th,
+.table td {
+    vertical-align: middle;
+    font-size: 14px;
+}
+
+#messageBox {
+    margin-bottom: 15px;
+}
+
+.status-active {
+    color: #198754;
+    font-weight: 600;
+}
+
+.status-inactive {
+    color: #dc3545;
+    font-weight: 600;
+}
