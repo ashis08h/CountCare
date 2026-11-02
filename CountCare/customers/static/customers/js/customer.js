@@ -47,6 +47,7 @@ $(document).ready(function () {
         } else {
 
             $("#businessNameGroup").hide();
+
             $("#businessName")
                 .prop("required", false)
                 .val("");
@@ -84,7 +85,9 @@ $(document).ready(function () {
             type: "GET",
 
             data: {
-                search: searchValue
+                search: searchValue,
+                customer_type: $("#customerTypeFilter").val() || "",
+                status: $("#customerStatusFilter").val() || ""
             },
 
             success: function (response) {
@@ -187,8 +190,7 @@ $(document).ready(function () {
                     );
 
 
-                    // IMPORTANT:
-                    // Append View and Activate/Deactivate exactly once.
+                    // Action Column
                     const actionCell = $("<td>");
 
                     actionCell.append(profileButton);
@@ -516,6 +518,84 @@ $(document).ready(function () {
             }
 
         });
+
+    });
+
+
+    // ==========================================
+    // Customer Type Filter
+    // ==========================================
+
+    $("#customerTypeFilter").on("change", function () {
+
+        currentPage = 1;
+
+        loadCustomers();
+
+    });
+
+
+    // ==========================================
+    // Customer Status Filter
+    // ==========================================
+
+    $("#customerStatusFilter").on("change", function () {
+
+        currentPage = 1;
+
+        loadCustomers();
+
+    });
+
+
+    // ==========================================
+    // Customer Export
+    // ==========================================
+
+    function exportCustomers(format) {
+
+        const params = new URLSearchParams({
+
+            format: format,
+
+            search: $("#searchCustomer").val().trim(),
+
+            customer_type: $("#customerTypeFilter").val() || "",
+
+            status: $("#customerStatusFilter").val() || ""
+
+        });
+
+        const exportUrl =
+            API_BASE_URL + "customers/export/?" + params.toString();
+
+        window.location.href = exportUrl;
+
+    }
+
+
+    // ==========================================
+    // Export Excel
+    // ==========================================
+
+    $("#exportExcel").on("click", function (event) {
+
+        event.preventDefault();
+
+        exportCustomers("xlsx");
+
+    });
+
+
+    // ==========================================
+    // Export CSV
+    // ==========================================
+
+    $("#exportCSV").on("click", function (event) {
+
+        event.preventDefault();
+
+        exportCustomers("csv");
 
     });
 

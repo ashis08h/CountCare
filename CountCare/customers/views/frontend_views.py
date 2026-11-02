@@ -15,3 +15,10 @@ def customer_detail_page(request, customer_id):
 
 def customer_import_page(request):
     return render(request, "customers/customer_import.html")
+
+
+def customer_import_history_page(request):
+    return render(
+        request,
+        "customers/customer_import_history.html"
+    )

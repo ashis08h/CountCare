@@ -195,6 +195,12 @@ class CustomerImportPreviewAPIView(APIView):
 
         invalid_count = len(row_objects) - valid_count
 
+        batch.failed_rows = invalid_count
+
+        batch.save(
+            update_fields=["failed_rows"]
+        )
+
         return Response(
             {
                 "message": "File uploaded and validated successfully.",

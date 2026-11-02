@@ -29,6 +29,10 @@
                class="btn btn-outline-primary">
                 Import Customers
             </a>
+            <a href="/api/customer-import-history/"
+               class="btn btn-outline-secondary">
+                Import History
+            </a>
 
             <button class="btn btn-primary"
                     data-bs-toggle="collapse"
@@ -176,9 +180,60 @@
                 </div>
 
                 <div class="col-md-6">
-                    <input type="text" id="searchCustomer"
-                           class="form-control"
-                           placeholder="Search by name, mobile, email or code">
+                    <div class="row g-2 align-items-center">
+
+                        <div class="col-md-4">
+                            <input type="text"
+                                   id="searchCustomer"
+                                   class="form-control"
+                                   placeholder="Search by name, mobile, email or code">
+                        </div>
+
+                        <div class="col-md-2">
+                            <select id="customerTypeFilter" class="form-select">
+                                <option value="">All Types</option>
+                                <option value="INDIVIDUAL">Individual</option>
+                                <option value="BUSINESS">Business</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-2">
+                            <select id="customerStatusFilter" class="form-select">
+                                <option value="">All Statuses</option>
+                                <option value="ACTIVE">Active</option>
+                                <option value="INACTIVE">Inactive</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="dropdown">
+                                <button class="btn btn-success dropdown-toggle w-100"
+                                        type="button"
+                                        data-bs-toggle="dropdown">
+                                    Export Customers
+                                </button>
+
+                                <ul class="dropdown-menu dropdown-menu-end w-100">
+
+                                    <li>
+                                        <a class="dropdown-item" href="#" id="exportExcel">
+                                            <i class="bi bi-file-earmark-excel"></i>
+                                            Export to Excel
+                                        </a>
+                                    </li>
+
+                                    <li>
+                                        <a class="dropdown-item" href="#" id="exportCSV">
+                                            <i class="bi bi-filetype-csv"></i>
+                                            Export to CSV
+                                        </a>
+                                    </li>
+
+                                </ul>
+                            </div>
+                        </div>
+
+                    </div>
                 </div>
             </div>
         </div>

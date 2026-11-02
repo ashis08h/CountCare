@@ -1,7 +1,7 @@
 from django.urls import path
 
 from customers.views.frontend_views import customer_management_page,\
-    customer_detail_page, customer_import_page
+    customer_detail_page, customer_import_page, customer_import_history_page
 
 from customers.views.customer_views import (
     CustomerListAPIView,
@@ -19,7 +19,56 @@ from customers.views.customer_import_views import (
     CustomerImportConfirmAPIView,
 )
 
+from customers.views.customer_import_history_views import (
+    CustomerImportHistoryAPIView,
+    CustomerImportHistoryDetailAPIView,
+    CustomerImportFailedReportAPIView,
+    CustomerImportOriginalDataAPIView,
+)
+
+from customers.views.customer_export_views import (
+    CustomerExportAPIView,
+)
+
 urlpatterns = [
+
+    path(
+        "customers/export/",
+        CustomerExportAPIView.as_view(),
+        name="customer-export",
+    ),
+
+    # Customer Import History
+
+    path(
+        "customer-imports/history/",
+        CustomerImportHistoryAPIView.as_view(),
+        name="customer-import-history",
+    ),
+
+    path(
+        "customer-imports/history/<int:batch_id>/",
+        CustomerImportHistoryDetailAPIView.as_view(),
+        name="customer-import-history-detail",
+    ),
+
+    path(
+        "customer-imports/history/<int:batch_id>/failed-report/",
+        CustomerImportFailedReportAPIView.as_view(),
+        name="customer-import-failed-report",
+    ),
+
+    path(
+        "customer-imports/history/<int:batch_id>/original-data/",
+        CustomerImportOriginalDataAPIView.as_view(),
+        name="customer-import-original-data",
+    ),
+
+    path(
+        "customer-import-history/",
+        customer_import_history_page,
+        name="customer-import-history-page",
+    ),
 
     path(
         "customer-imports/template/",
