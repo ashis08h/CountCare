@@ -188,15 +188,23 @@ def customer_export_rows(customers):
 
 class CustomerExportAPIView(APIView):
 
-    permission_classes = []
+    authentication_classes = []
+    permission_classes = [ToggleAPIPermission]
 
-    def get(self, request):
+    # Important: Do not let DRF interpret ?format=xlsx
+    # as a renderer format override.
+    # format_kwarg = None
+
+    def get(self, request, *args, **kwargs):
+
+        print("EXPORT GET METHOD EXECUTED")
 
         export_format = request.query_params.get(
-            "format",
+            "export_format",
             "xlsx"
         ).lower()
 
+        print("Export format:", export_format)
         if export_format not in ["xlsx", "csv"]:
 
             return HttpResponse(
@@ -225,7 +233,7 @@ class CustomerExportAPIView(APIView):
 
             writer.writerow(EXPORT_HEADERS)
             writer.writerows(rows)
-
+            print("response", response)
             return response
 
         # Excel export
@@ -285,5 +293,5 @@ class CustomerExportAPIView(APIView):
         )
 
         workbook.save(response)
-
+        print("response excel", response)
         return response

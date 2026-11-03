@@ -553,24 +553,17 @@ $(document).ready(function () {
     // ==========================================
 
     function exportCustomers(format) {
-
         const params = new URLSearchParams({
-
-            format: format,
-
+            export_format: format,
             search: $("#searchCustomer").val().trim(),
-
             customer_type: $("#customerTypeFilter").val() || "",
-
             status: $("#customerStatusFilter").val() || ""
-
         });
 
         const exportUrl =
             API_BASE_URL + "customers/export/?" + params.toString();
 
         window.location.href = exportUrl;
-
     }
 
 

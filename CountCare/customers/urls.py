@@ -32,12 +32,6 @@ from customers.views.customer_export_views import (
 
 urlpatterns = [
 
-    path(
-        "customers/export/",
-        CustomerExportAPIView.as_view(),
-        name="customer-export",
-    ),
-
     # Customer Import History
 
     path(
@@ -111,6 +105,12 @@ urlpatterns = [
         "customer-import/",
         customer_import_page,
         name="customer-import-page",
+    ),
+
+    path(
+        "customers/export/",
+        CustomerExportAPIView.as_view(),
+        name="customer-export",
     ),
 
     # Customer APIs
