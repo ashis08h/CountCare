@@ -1,287 +1,575 @@
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CashCount | Customer Management</title>
+{% extends "customers/base.html" %}
+{% load static %}
 
-    <link rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+{% block title %}Customer Management | CashCount{% endblock %}
 
-    {% load static %}
-    <link rel="stylesheet"
-          href="{% static 'customers/css/customer.css' %}">
-</head>
+{% block page_title %}Customer Management{% endblock %}
 
-<body>
-<div class="container-fluid p-4">
+{% block page_subtitle %}
+    Manage your CashCount customers
+{% endblock %}
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+{% block customers_active %}active{% endblock %}
+
+
+{% block extra_css %}
+<link rel="stylesheet"
+      href="{% static 'customers/css/customer.css' %}">
+{% endblock %}
+
+
+{% block content %}
+
+<div class="container-fluid p-0">
+
+    <!-- PAGE HEADING -->
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+
         <div>
-            <h2>Customer Management</h2>
-            <p class="text-muted mb-0">Manage your CashCount customers</p>
+            <h4 class="mb-1">Customer Directory</h4>
+            <p class="text-muted mb-0">
+                Manage your CashCount customers and their information.
+            </p>
         </div>
 
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
 
-            <a href="/api/customer-import/"
+            <a href="{% url 'customer-import-page' %}"
                class="btn btn-outline-primary">
+                <i class="bi bi-file-earmark-arrow-up"></i>
                 Import Customers
             </a>
-            <a href="/api/customer-import-history/"
+
+            <a href="{% url 'customer-import-history-page' %}"
                class="btn btn-outline-secondary">
+                <i class="bi bi-clock-history"></i>
                 Import History
             </a>
 
             <button class="btn btn-primary"
+                    type="button"
                     data-bs-toggle="collapse"
-                    data-bs-target="#customerFormSection">
-                + Add Customer
+                    data-bs-target="#customerFormSection"
+                    aria-expanded="false"
+                    aria-controls="customerFormSection">
+                <i class="bi bi-plus-lg"></i>
+                Add Customer
             </button>
 
         </div>
+
     </div>
 
+
+    <!-- MESSAGE BOX -->
     <div id="messageBox"></div>
 
-    <!-- Customer Registration Form -->
+
+    <!-- CUSTOMER REGISTRATION FORM -->
     <div class="collapse mb-4" id="customerFormSection">
+
         <div class="card shadow-sm">
-            <div class="card-header">
-                <h5 class="mb-0">Customer Registration</h5>
+
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0">
+                    <i class="bi bi-person-plus me-2"></i>
+                    Customer Registration
+                </h5>
             </div>
 
             <div class="card-body">
+
                 <form id="customerForm">
 
+                    <!-- CUSTOMER DETAILS -->
                     <h6 class="mb-3">Customer Details</h6>
 
                     <div class="row">
+
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">Customer Type *</label>
-                            <select class="form-select" id="customerType" required>
-                                <option value="INDIVIDUAL">Individual</option>
-                                <option value="BUSINESS">Business</option>
+                            <label class="form-label">
+                                Customer Type *
+                            </label>
+
+                            <select class="form-select"
+                                    id="customerType"
+                                    required>
+
+                                <option value="INDIVIDUAL">
+                                    Individual
+                                </option>
+
+                                <option value="BUSINESS">
+                                    Business
+                                </option>
+
                             </select>
                         </div>
 
-                        <div class="col-md-4 mb-3" id="businessNameGroup">
-                            <label class="form-label">Business Name</label>
-                            <input type="text" class="form-control"
+
+                        <div class="col-md-4 mb-3"
+                             id="businessNameGroup">
+
+                            <label class="form-label">
+                                Business Name
+                            </label>
+
+                            <input type="text"
+                                   class="form-control"
                                    id="businessName">
                         </div>
 
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Contact Person *</label>
-                            <input type="text" class="form-control"
-                                   id="contactPerson" required>
-                        </div>
 
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">Mobile Number *</label>
-                            <input type="text" class="form-control"
-                                   id="mobileNumber" maxlength="13" required>
+
+                            <label class="form-label">
+                                Contact Person *
+                            </label>
+
+                            <input type="text"
+                                   class="form-control"
+                                   id="contactPerson"
+                                   required>
                         </div>
 
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Alternate Mobile</label>
-                            <input type="text" class="form-control"
-                                   id="alternateMobile" maxlength="13">
-                        </div>
 
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">Email</label>
-                            <input type="email" class="form-control"
+
+                            <label class="form-label">
+                                Mobile Number *
+                            </label>
+
+                            <input type="text"
+                                   class="form-control"
+                                   id="mobileNumber"
+                                   maxlength="13"
+                                   required>
+                        </div>
+
+
+                        <div class="col-md-4 mb-3">
+
+                            <label class="form-label">
+                                Alternate Mobile
+                            </label>
+
+                            <input type="text"
+                                   class="form-control"
+                                   id="alternateMobile"
+                                   maxlength="13">
+                        </div>
+
+
+                        <div class="col-md-4 mb-3">
+
+                            <label class="form-label">
+                                Email
+                            </label>
+
+                            <input type="email"
+                                   class="form-control"
                                    id="email">
                         </div>
 
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">GST Number</label>
-                            <input type="text" class="form-control"
-                                   id="gstNumber" maxlength="15">
-                        </div>
 
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">PAN Number</label>
-                            <input type="text" class="form-control"
-                                   id="panNumber" maxlength="10">
+
+                            <label class="form-label">
+                                GST Number
+                            </label>
+
+                            <input type="text"
+                                   class="form-control"
+                                   id="gstNumber"
+                                   maxlength="15">
                         </div>
+
+
+                        <div class="col-md-4 mb-3">
+
+                            <label class="form-label">
+                                PAN Number
+                            </label>
+
+                            <input type="text"
+                                   class="form-control"
+                                   id="panNumber"
+                                   maxlength="10">
+                        </div>
+
 
                         <div class="col-md-12 mb-3">
-                            <label class="form-label">Notes</label>
-                            <textarea class="form-control" id="notes"
+
+                            <label class="form-label">
+                                Notes
+                            </label>
+
+                            <textarea class="form-control"
+                                      id="notes"
                                       rows="2"></textarea>
                         </div>
+
                     </div>
 
-                    <hr>
 
+                    <hr class="my-4">
+
+
+                    <!-- BILLING ADDRESS -->
                     <h6 class="mb-3">Billing Address</h6>
 
                     <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Address Line 1 *</label>
-                            <input type="text" class="form-control"
-                                   id="addressLine1" required>
-                        </div>
 
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Address Line 2</label>
-                            <input type="text" class="form-control"
+
+                            <label class="form-label">
+                                Address Line 1 *
+                            </label>
+
+                            <input type="text"
+                                   class="form-control"
+                                   id="addressLine1"
+                                   required>
+                        </div>
+
+
+                        <div class="col-md-6 mb-3">
+
+                            <label class="form-label">
+                                Address Line 2
+                            </label>
+
+                            <input type="text"
+                                   class="form-control"
                                    id="addressLine2">
                         </div>
 
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">City *</label>
-                            <input type="text" class="form-control"
-                                   id="city" required>
-                        </div>
 
                         <div class="col-md-3 mb-3">
-                            <label class="form-label">District</label>
-                            <input type="text" class="form-control"
+
+                            <label class="form-label">
+                                City *
+                            </label>
+
+                            <input type="text"
+                                   class="form-control"
+                                   id="city"
+                                   required>
+                        </div>
+
+
+                        <div class="col-md-3 mb-3">
+
+                            <label class="form-label">
+                                District
+                            </label>
+
+                            <input type="text"
+                                   class="form-control"
                                    id="district">
                         </div>
 
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">State *</label>
-                            <input type="text" class="form-control"
-                                   id="state" required>
-                        </div>
 
                         <div class="col-md-3 mb-3">
-                            <label class="form-label">PIN Code *</label>
-                            <input type="text" class="form-control"
-                                   id="pincode" maxlength="6" required>
+
+                            <label class="form-label">
+                                State *
+                            </label>
+
+                            <input type="text"
+                                   class="form-control"
+                                   id="state"
+                                   required>
                         </div>
+
+
+                        <div class="col-md-3 mb-3">
+
+                            <label class="form-label">
+                                PIN Code *
+                            </label>
+
+                            <input type="text"
+                                   class="form-control"
+                                   id="pincode"
+                                   maxlength="6"
+                                   required>
+                        </div>
+
                     </div>
 
-                    <button type="submit" class="btn btn-success"
-                            id="saveCustomerBtn">
-                        Save Customer
-                    </button>
 
-                    <button type="reset" class="btn btn-secondary">
-                        Clear
-                    </button>
+                    <!-- FORM BUTTONS -->
+                    <div class="d-flex gap-2 mt-3">
+
+                        <button type="submit"
+                                class="btn btn-success"
+                                id="saveCustomerBtn">
+
+                            <i class="bi bi-check-circle me-1"></i>
+                            Save Customer
+                        </button>
+
+
+                        <button type="reset"
+                                class="btn btn-outline-secondary">
+
+                            <i class="bi bi-arrow-counterclockwise me-1"></i>
+                            Clear
+                        </button>
+
+                    </div>
 
                 </form>
+
             </div>
+
         </div>
+
     </div>
 
-    <!-- Customer Listing -->
+
+    <!-- CUSTOMER LIST -->
     <div class="card shadow-sm">
-        <div class="card-header">
-            <div class="row align-items-center">
-                <div class="col-md-6">
-                    <h5 class="mb-0">Customer List</h5>
+
+        <!-- TABLE HEADER -->
+        <div class="card-header bg-white py-3">
+
+            <div class="row align-items-center g-3">
+
+                <div class="col-lg-3">
+
+                    <h5 class="mb-1">
+                        <i class="bi bi-people me-2"></i>
+                        Customer List
+                    </h5>
+
+                    <small class="text-muted">
+                        View and manage registered customers
+                    </small>
+
                 </div>
 
-                <div class="col-md-6">
+
+                <!-- SEARCH AND FILTERS -->
+                <div class="col-lg-9">
+
                     <div class="row g-2 align-items-center">
 
-                        <div class="col-md-4">
+                        <!-- SEARCH -->
+                        <div class="col-xl-4 col-md-6">
+
                             <input type="text"
                                    id="searchCustomer"
                                    class="form-control"
-                                   placeholder="Search by name, mobile, email or code">
+                                   placeholder="Search name, mobile, email or code">
+
                         </div>
 
-                        <div class="col-md-2">
-                            <select id="customerTypeFilter" class="form-select">
-                                <option value="">All Types</option>
-                                <option value="INDIVIDUAL">Individual</option>
-                                <option value="BUSINESS">Business</option>
+
+                        <!-- CUSTOMER TYPE FILTER -->
+                        <div class="col-xl-2 col-md-3">
+
+                            <select id="customerTypeFilter"
+                                    class="form-select">
+
+                                <option value="">
+                                    All Types
+                                </option>
+
+                                <option value="INDIVIDUAL">
+                                    Individual
+                                </option>
+
+                                <option value="BUSINESS">
+                                    Business
+                                </option>
+
                             </select>
+
                         </div>
 
-                        <div class="col-md-2">
-                            <select id="customerStatusFilter" class="form-select">
-                                <option value="">All Statuses</option>
-                                <option value="ACTIVE">Active</option>
-                                <option value="INACTIVE">Inactive</option>
+
+                        <!-- CUSTOMER STATUS FILTER -->
+                        <div class="col-xl-2 col-md-3">
+
+                            <select id="customerStatusFilter"
+                                    class="form-select">
+
+                                <option value="">
+                                    All Statuses
+                                </option>
+
+                                <option value="ACTIVE">
+                                    Active
+                                </option>
+
+                                <option value="INACTIVE">
+                                    Inactive
+                                </option>
+
                             </select>
+
                         </div>
 
-                        <div class="col-md-4">
+
+                        <!-- EXPORT DROPDOWN -->
+                        <div class="col-xl-4 col-md-6">
+
                             <div class="dropdown">
+
                                 <button class="btn btn-success dropdown-toggle w-100"
                                         type="button"
-                                        data-bs-toggle="dropdown">
+                                        data-bs-toggle="dropdown"
+                                        aria-expanded="false">
+
+                                    <i class="bi bi-download me-1"></i>
                                     Export Customers
+
                                 </button>
+
 
                                 <ul class="dropdown-menu dropdown-menu-end w-100">
 
                                     <li>
-                                        <a class="dropdown-item" href="#" id="exportExcel">
-                                            <i class="bi bi-file-earmark-excel"></i>
+
+                                        <a class="dropdown-item"
+                                           href="#"
+                                           id="exportExcel">
+
+                                            <i class="bi bi-file-earmark-excel text-success me-2"></i>
                                             Export to Excel
+
                                         </a>
+
                                     </li>
 
+
                                     <li>
-                                        <a class="dropdown-item" href="#" id="exportCSV">
-                                            <i class="bi bi-filetype-csv"></i>
+
+                                        <a class="dropdown-item"
+                                           href="#"
+                                           id="exportCSV">
+
+                                            <i class="bi bi-filetype-csv text-primary me-2"></i>
                                             Export to CSV
+
                                         </a>
+
                                     </li>
 
                                 </ul>
+
                             </div>
+
                         </div>
 
                     </div>
+
                 </div>
+
             </div>
+
         </div>
 
+
+        <!-- TABLE BODY -->
         <div class="card-body">
+
             <div class="table-responsive">
-                <table class="table table-bordered table-hover">
+
+                <table class="table table-bordered table-hover align-middle">
+
                     <thead class="table-light">
-                    <tr>
-                        <th>Customer Code</th>
-                        <th>Customer Name</th>
-                        <th>Type</th>
-                        <th>Mobile</th>
-                        <th>Email</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                    </tr>
+
+                        <tr>
+                            <th>Customer Code</th>
+                            <th>Customer Name</th>
+                            <th>Type</th>
+                            <th>Mobile</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+
                     </thead>
 
+
                     <tbody id="customerTableBody">
-                    <tr>
-                        <td colspan="7" class="text-center">
-                            Loading customers...
-                        </td>
-                    </tr>
+
+                        <tr>
+
+                            <td colspan="7" class="text-center py-4">
+
+                                <div class="spinner-border spinner-border-sm text-primary me-2"
+                                     role="status">
+
+                                    <span class="visually-hidden">
+                                        Loading...
+                                    </span>
+
+                                </div>
+
+                                Loading customers...
+
+                            </td>
+
+                        </tr>
+
                     </tbody>
+
                 </table>
+
             </div>
 
-            <div class="d-flex justify-content-between align-items-center">
-                <span id="paginationInfo" class="text-muted"></span>
 
-                <div>
-                    <button class="btn btn-outline-primary btn-sm"
-                            id="previousPage">Previous</button>
+            <!-- PAGINATION -->
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+
+                <span id="paginationInfo"
+                      class="text-muted small">
+                </span>
+
+
+                <div class="d-flex gap-2">
 
                     <button class="btn btn-outline-primary btn-sm"
-                            id="nextPage">Next</button>
+                            id="previousPage"
+                            type="button">
+
+                        <i class="bi bi-chevron-left"></i>
+                        Previous
+
+                    </button>
+
+
+                    <button class="btn btn-outline-primary btn-sm"
+                            id="nextPage"
+                            type="button">
+
+                        Next
+                        <i class="bi bi-chevron-right"></i>
+
+                    </button>
+
                 </div>
+
             </div>
+
         </div>
+
     </div>
 
 </div>
 
+{% endblock %}
+
+
+{% block extra_js %}
+
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script src="{% static 'customers/js/customer.js' %}"></script>
-</body>
-</html>
+
+{% endblock %}

@@ -46,5 +46,7 @@ urlpatterns += [
         name="token_refresh"
     ),
 
+    path("accounts/", include("accounts.urls")),
+
 ]
 

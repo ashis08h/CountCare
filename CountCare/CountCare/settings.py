@@ -39,7 +39,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'customers',
     'rest_framework',
-    'django_filters'
+    'django_filters',
+    'accounts'
 ]
 
 MIDDLEWARE = [
@@ -152,5 +153,9 @@ REST_FRAMEWORK = {
         "rest_framework.filters.OrderingFilter",
     ],
 }
+
+LOGIN_URL = "/accounts/login/"
+LOGIN_REDIRECT_URL = "/api/dashboard/"
+LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 

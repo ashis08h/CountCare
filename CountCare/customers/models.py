@@ -70,6 +70,14 @@ class Customer(models.Model):
         related_name="customers_created"
     )
 
+    company = models.ForeignKey(
+        "accounts.Company",
+        on_delete=models.PROTECT,
+        related_name="customers",
+        null=True,
+        blank=True,
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     updated_at = models.DateTimeField(auto_now=True)

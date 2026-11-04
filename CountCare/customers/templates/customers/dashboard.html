@@ -1,0 +1,497 @@
+
+{% extends "customers/base.html" %}
+{% load static %}
+
+{% block title %}Dashboard | CashCount{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block page_subtitle %}
+Welcome to CashCount ERP
+{% endblock %}
+
+{% block dashboard_active %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-stat-card {
+        border: 1px solid #e9edf5;
+        border-radius: 12px;
+        height: 100%;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .dashboard-stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 18px rgba(0, 0, 0, 0.06);
+    }
+
+    .stat-label {
+        color: #6c757d;
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+
+    .stat-value {
+        font-size: 28px;
+        font-weight: 700;
+        color: #172b4d;
+        margin-bottom: 0;
+    }
+
+    .stat-icon {
+        width: 46px;
+        height: 46px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 21px;
+    }
+
+    .chart-card {
+        border: 1px solid #e9edf5;
+        border-radius: 12px;
+        height: 100%;
+    }
+
+    .chart-container {
+        position: relative;
+        height: 320px;
+        width: 100%;
+    }
+
+    .quick-action-card {
+        border: 1px solid #e9edf5;
+        border-radius: 10px;
+        padding: 18px;
+        text-decoration: none;
+        color: inherit;
+        display: block;
+        height: 100%;
+        transition: all 0.2s ease;
+    }
+
+    .quick-action-card:hover {
+        border-color: #0d6efd;
+        background: #f8faff;
+        color: #0d6efd;
+        transform: translateY(-2px);
+    }
+
+    .quick-action-icon {
+        font-size: 25px;
+        margin-bottom: 12px;
+        color: #0d6efd;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid p-0">
+
+    <!-- Dashboard Heading -->
+
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+
+        <div>
+            <h4 class="mb-1">Dashboard Overview</h4>
+            <p class="text-muted mb-0">
+                Here's what's happening in your business.
+            </p>
+        </div>
+
+        <span class="text-muted">
+            <i class="bi bi-calendar3 me-1"></i>
+            Customer Overview
+        </span>
+
+    </div>
+
+    <!-- Customer Summary Cards -->
+
+    <div class="row g-3 mb-4">
+
+        <div class="col-xl-3 col-md-6">
+
+            <div class="card dashboard-stat-card shadow-sm">
+                <div class="card-body">
+
+                    <div class="d-flex justify-content-between align-items-center">
+
+                        <div>
+                            <p class="stat-label">Total Customers</p>
+                            <h3 class="stat-value">
+                                {{ total_customers|default:0 }}
+                            </h3>
+                        </div>
+
+                        <div class="stat-icon bg-primary-subtle text-primary">
+                            <i class="bi bi-people"></i>
+                        </div>
+
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+
+            <div class="card dashboard-stat-card shadow-sm">
+                <div class="card-body">
+
+                    <div class="d-flex justify-content-between align-items-center">
+
+                        <div>
+                            <p class="stat-label">Active Customers</p>
+                            <h3 class="stat-value text-success">
+                                {{ active_customers|default:0 }}
+                            </h3>
+                        </div>
+
+                        <div class="stat-icon bg-success-subtle text-success">
+                            <i class="bi bi-person-check"></i>
+                        </div>
+
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+
+            <div class="card dashboard-stat-card shadow-sm">
+                <div class="card-body">
+
+                    <div class="d-flex justify-content-between align-items-center">
+
+                        <div>
+                            <p class="stat-label">Inactive Customers</p>
+                            <h3 class="stat-value text-danger">
+                                {{ inactive_customers|default:0 }}
+                            </h3>
+                        </div>
+
+                        <div class="stat-icon bg-danger-subtle text-danger">
+                            <i class="bi bi-person-x"></i>
+                        </div>
+
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+
+            <div class="card dashboard-stat-card shadow-sm">
+                <div class="card-body">
+
+                    <div class="d-flex justify-content-between align-items-center">
+
+                        <div>
+                            <p class="stat-label">Business Customers</p>
+                            <h3 class="stat-value text-info">
+                                {{ business_customers|default:0 }}
+                            </h3>
+                        </div>
+
+                        <div class="stat-icon bg-info-subtle text-info">
+                            <i class="bi bi-building"></i>
+                        </div>
+
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Charts -->
+
+    <div class="row g-3 mb-4">
+
+        <!-- Customer Registration Trend -->
+
+        <div class="col-lg-8">
+
+            <div class="card chart-card shadow-sm">
+
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">
+                        <i class="bi bi-graph-up text-primary me-2"></i>
+                        Customer Registration Trend
+                    </h5>
+                    <small class="text-muted">
+                        New customer registrations over the last 6 months
+                    </small>
+                </div>
+
+                <div class="card-body">
+
+                    <div class="chart-container">
+                        <canvas id="customerTrendChart"></canvas>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- Customer Distribution -->
+
+        <div class="col-lg-4">
+
+            <div class="card chart-card shadow-sm">
+
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">
+                        <i class="bi bi-pie-chart text-primary me-2"></i>
+                        Customer Distribution
+                    </h5>
+                    <small class="text-muted">
+                        Individual vs Business customers
+                    </small>
+                </div>
+
+                <div class="card-body">
+
+                    <div class="chart-container">
+                        <canvas id="customerDistributionChart"></canvas>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Quick Actions -->
+
+    <div class="mb-4">
+
+        <h5 class="mb-3">Quick Actions</h5>
+
+        <div class="row g-3">
+
+            <div class="col-xl-3 col-md-6">
+
+                <a href="{% url 'customer-management' %}"
+                   class="quick-action-card">
+
+                    <div class="quick-action-icon">
+                        <i class="bi bi-person-plus"></i>
+                    </div>
+
+                    <h6>Manage Customers</h6>
+
+                    <p class="text-muted small mb-0">
+                        Add, update and manage your customers.
+                    </p>
+
+                </a>
+
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+
+                <a href="{% url 'customer-import-page' %}"
+                   class="quick-action-card">
+
+                    <div class="quick-action-icon">
+                        <i class="bi bi-file-earmark-arrow-up"></i>
+                    </div>
+
+                    <h6>Bulk Customer Import</h6>
+
+                    <p class="text-muted small mb-0">
+                        Upload customer records using Excel or CSV.
+                    </p>
+
+                </a>
+
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+
+                <a href="{% url 'customer-import-history-page' %}"
+                   class="quick-action-card">
+
+                    <div class="quick-action-icon">
+                        <i class="bi bi-clock-history"></i>
+                    </div>
+
+                    <h6>Import History</h6>
+
+                    <p class="text-muted small mb-0">
+                        View previous customer import records.
+                    </p>
+
+                </a>
+
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+
+                <a href="{% url 'customer-management' %}"
+                   class="quick-action-card">
+
+                    <div class="quick-action-icon">
+                        <i class="bi bi-people"></i>
+                    </div>
+
+                    <h6>View All Customers</h6>
+
+                    <p class="text-muted small mb-0">
+                        Search and view your customer database.
+                    </p>
+
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+{{ monthly_labels|json_script:"monthly-labels" }}
+{{ monthly_counts|json_script:"monthly-counts" }}
+
+<script>
+
+document.addEventListener("DOMContentLoaded", function () {
+
+    // Read chart data from Django
+
+    const monthlyLabels = JSON.parse(
+        document.getElementById("monthly-labels").textContent
+    );
+
+    const monthlyCounts = JSON.parse(
+        document.getElementById("monthly-counts").textContent
+    );
+
+    const individualCount = Number("{{ individual_customers|default:0 }}");
+    const businessCount = Number("{{ business_customers|default:0 }}");
+
+    // Customer Registration Trend Chart
+
+    const trendCanvas = document.getElementById("customerTrendChart");
+
+    if (trendCanvas) {
+
+        new Chart(trendCanvas, {
+            type: "line",
+
+            data: {
+                labels: monthlyLabels,
+
+                datasets: [{
+                    label: "New Customers",
+                    data: monthlyCounts,
+
+                    borderColor: "#0d6efd",
+                    backgroundColor: "rgba(13, 110, 253, 0.10)",
+
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    pointBackgroundColor: "#0d6efd"
+                }]
+            },
+
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: "top"
+                    }
+                },
+
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            precision: 0
+                        }
+                    }
+                }
+            }
+        });
+
+    }
+
+    // Customer Distribution Chart
+
+    const distributionCanvas = document.getElementById(
+        "customerDistributionChart"
+    );
+
+    if (distributionCanvas) {
+
+        new Chart(distributionCanvas, {
+            type: "doughnut",
+
+            data: {
+                labels: ["Individual", "Business"],
+
+                datasets: [{
+                    data: [individualCount, businessCount],
+
+                    backgroundColor: [
+                        "#0d6efd",
+                        "#20c997"
+                    ],
+
+                    borderWidth: 2,
+                    hoverOffset: 8
+                }]
+            },
+
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+
+                plugins: {
+                    legend: {
+                        position: "bottom"
+                    }
+                },
+
+                cutout: "65%"
+            }
+        });
+
+    }
+
+});
+
+</script>
+
+{% endblock %}

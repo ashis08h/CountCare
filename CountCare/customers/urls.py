@@ -30,7 +30,21 @@ from customers.views.customer_export_views import (
     CustomerExportAPIView,
 )
 
+from customers.views.frontend_views import (
+    dashboard_page,
+    customer_management_page,
+    customer_detail_page,
+    customer_import_page,
+    customer_import_history_page,
+)
+
 urlpatterns = [
+
+    path(
+        "dashboard/",
+        dashboard_page,
+        name="dashboard",
+    ),
 
     # Customer Import History
 
