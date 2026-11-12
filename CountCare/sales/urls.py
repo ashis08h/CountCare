@@ -16,6 +16,7 @@ from sales.views import (
     stock_location_page,
     machine_register_page,
     stock_movement_page,
+    StockLocationDetailAPIView
 )
 
 
@@ -97,6 +98,12 @@ urlpatterns = [
         "machines/transfer/",
         TransferMachineAPIView.as_view(),
         name="sales-transfer-machine",
+    ),
+
+    path(
+        "locations/<int:pk>/",
+        StockLocationDetailAPIView.as_view(),
+        name="sales-stock-location-detail",
     ),
 
 ]

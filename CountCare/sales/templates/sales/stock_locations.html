@@ -7,58 +7,85 @@
 
 {% block content %}
 
+<!-- LOCATION FORM -->
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-header bg-white py-3">
-        <h5 class="mb-0">Add Stock Location</h5>
+        <h5 class="mb-0" id="locationFormTitle">Add Stock Location</h5>
     </div>
 
     <div class="card-body">
+
         <form id="locationForm">
+            <input type="hidden" id="locationId">
+
             <div class="row g-3">
 
                 <div class="col-md-4">
                     <label class="form-label">Location Name *</label>
-                    <input name="name" class="form-control" required>
+                    <input name="name" id="locationName"
+                           class="form-control" maxlength="150" required>
                 </div>
 
                 <div class="col-md-3">
                     <label class="form-label">Location Code *</label>
-                    <input name="code" class="form-control" required>
+                    <input name="code" id="locationCode"
+                           class="form-control" maxlength="30" required>
                 </div>
 
                 <div class="col-md-5">
                     <label class="form-label">Address</label>
-                    <input name="address" class="form-control">
+                    <input name="address" id="locationAddress"
+                           class="form-control">
                 </div>
 
                 <div class="col-md-4">
                     <label class="form-label">City</label>
-                    <input name="city" class="form-control">
+                    <input name="city" id="locationCity"
+                           class="form-control" maxlength="100">
                 </div>
 
                 <div class="col-md-4">
                     <label class="form-label">State</label>
-                    <input name="state" class="form-control">
+                    <input name="state" id="locationState"
+                           class="form-control" maxlength="100">
                 </div>
 
                 <div class="col-md-4">
                     <label class="form-label">PIN Code</label>
-                    <input name="pincode" class="form-control" maxlength="10">
+                    <input name="pincode" id="locationPincode"
+                           class="form-control" maxlength="10">
                 </div>
 
-                <div class="col-12">
-                    <div class="form-check">
-                        <input type="checkbox" name="is_default"
-                               id="isDefault" class="form-check-input">
+                <div class="col-md-6">
+                    <div class="form-check mt-2">
+                        <input type="checkbox" id="isDefault"
+                               class="form-check-input">
                         <label for="isDefault" class="form-check-label">
                             Set as default location
                         </label>
                     </div>
                 </div>
 
+                <div class="col-md-6">
+                    <div class="form-check mt-2">
+                        <input type="checkbox" id="isActive"
+                               class="form-check-input" checked>
+                        <label for="isActive" class="form-check-label">
+                            Active location
+                        </label>
+                    </div>
+                </div>
+
                 <div class="col-12">
-                    <button class="btn btn-primary" type="submit">
-                        <i class="bi bi-plus-circle me-1"></i> Save Location
+                    <button class="btn btn-primary" type="submit"
+                            id="saveLocationBtn">
+                        <i class="bi bi-plus-circle me-1"></i>
+                        Save Location
+                    </button>
+
+                    <button class="btn btn-secondary d-none"
+                            type="button" id="cancelEditBtn">
+                        Cancel Edit
                     </button>
                 </div>
 
@@ -66,17 +93,30 @@
         </form>
 
         <div id="locationMessage" class="mt-3"></div>
+
     </div>
 </div>
 
+
+<!-- LOCATION LIST -->
 <div class="card border-0 shadow-sm">
-    <div class="card-header bg-white py-3">
+
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Warehouse List</h5>
+
+        <button class="btn btn-outline-secondary btn-sm"
+                type="button" id="refreshLocationsBtn">
+            <i class="bi bi-arrow-clockwise me-1"></i>
+            Refresh
+        </button>
     </div>
 
     <div class="card-body">
+
         <div class="table-responsive">
-            <table class="table table-hover">
+
+            <table class="table table-hover align-middle">
+
                 <thead class="table-light">
                     <tr>
                         <th>Name</th>
@@ -85,125 +125,470 @@
                         <th>State</th>
                         <th>Default</th>
                         <th>Status</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
+
                 <tbody id="locationTableBody">
                     <tr>
-                        <td colspan="6" class="text-center text-muted">
+                        <td colspan="7" class="text-center text-muted">
                             Loading locations...
                         </td>
                     </tr>
                 </tbody>
+
             </table>
+
         </div>
+
     </div>
 </div>
 
 {% endblock %}
 
+
 {% block extra_js %}
+
 <script>
+
 $(function () {
 
     const API = "/api/sales/locations/";
 
-    function csrfToken() {
-        return $('meta[name="csrf-token"]').attr("content")
-            || document.cookie.split("; ")
-                .find(row => row.startsWith("csrftoken="))
-                ?.split("=")[1];
+    let locationsCache = [];
+
+    // -------------------------------------------------
+    // CSRF TOKEN
+    // -------------------------------------------------
+
+    function getCookie(name) {
+
+        const cookies = document.cookie.split(";");
+
+        for (let cookie of cookies) {
+
+            cookie = cookie.trim();
+
+            if (cookie.startsWith(name + "=")) {
+                return decodeURIComponent(
+                    cookie.substring(name.length + 1)
+                );
+            }
+        }
+
+        return null;
     }
+
+    function csrfToken() {
+
+        return getCookie("csrftoken")
+            || $('meta[name="csrf-token"]').attr("content");
+    }
+
+
+    // -------------------------------------------------
+    // HTML ESCAPE
+    // -------------------------------------------------
 
     function escapeHtml(value) {
-        return $("<div>").text(value ?? "").html();
+
+        return $("<div>")
+            .text(value ?? "")
+            .html();
     }
 
-    function loadLocations() {
-        $.get(API, function (response) {
 
-            const locations = Array.isArray(response)
-                ? response
-                : (response.results || []);
+    // -------------------------------------------------
+    // DISPLAY MESSAGE
+    // -------------------------------------------------
 
-            if (!locations.length) {
-                $("#locationTableBody").html(`
-                    <tr><td colspan="6" class="text-center text-muted">
-                        No stock locations found.
-                    </td></tr>
-                `);
-                return;
+    function showMessage(message, type = "success") {
+
+        $("#locationMessage").html(`
+            <div class="alert alert-${type} alert-dismissible fade show">
+                ${escapeHtml(message)}
+                <button type="button" class="btn-close"
+                        data-bs-dismiss="alert"></button>
+            </div>
+        `);
+    }
+
+
+    // -------------------------------------------------
+    // ERROR HANDLING
+    // -------------------------------------------------
+
+    function getErrorMessage(xhr) {
+
+        const response = xhr.responseJSON;
+
+        if (!response) {
+            return "Something went wrong. Please try again.";
+        }
+
+        if (typeof response.detail === "string") {
+            return response.detail;
+        }
+
+        let messages = [];
+
+        Object.keys(response).forEach(key => {
+
+            const value = response[key];
+
+            if (Array.isArray(value)) {
+                messages.push(key + ": " + value.join(", "));
+            } else if (typeof value === "string") {
+                messages.push(key + ": " + value);
+            } else {
+                messages.push(key + ": " + JSON.stringify(value));
             }
 
-            let html = "";
-
-            locations.forEach(item => {
-                html += `
-                    <tr>
-                        <td class="fw-semibold">${escapeHtml(item.name)}</td>
-                        <td>${escapeHtml(item.code)}</td>
-                        <td>${escapeHtml(item.city)}</td>
-                        <td>${escapeHtml(item.state)}</td>
-                        <td>${item.is_default
-                            ? '<span class="badge bg-primary">Default</span>'
-                            : '-'}</td>
-                        <td>${item.is_active
-                            ? '<span class="badge bg-success">Active</span>'
-                            : '<span class="badge bg-secondary">Inactive</span>'}</td>
-                    </tr>
-                `;
-            });
-
-            $("#locationTableBody").html(html);
-
-        }).fail(function (xhr) {
-            console.error(xhr.responseText);
-            $("#locationTableBody").html(`
-                <tr><td colspan="6" class="text-center text-danger">
-                    Unable to load locations.
-                </td></tr>
-            `);
         });
+
+        return messages.join(" | ") || "Unable to save location.";
     }
 
+
+    // -------------------------------------------------
+    // RESET FORM
+    // -------------------------------------------------
+
+    function resetForm() {
+
+        $("#locationForm")[0].reset();
+
+        $("#locationId").val("");
+        $("#isActive").prop("checked", true);
+        $("#isDefault").prop("checked", false);
+
+        $("#locationFormTitle").text("Add Stock Location");
+
+        $("#saveLocationBtn")
+            .html('<i class="bi bi-plus-circle me-1"></i> Save Location');
+
+        $("#cancelEditBtn").addClass("d-none");
+    }
+
+
+    // -------------------------------------------------
+    // LOAD LOCATIONS
+    // -------------------------------------------------
+
+    function loadLocations() {
+
+        $("#locationTableBody").html(`
+            <tr>
+                <td colspan="7" class="text-center text-muted">
+                    Loading locations...
+                </td>
+            </tr>
+        `);
+
+        $.get(API)
+
+            .done(function (response) {
+
+                locationsCache = Array.isArray(response)
+                    ? response
+                    : (response.results || []);
+
+                if (!locationsCache.length) {
+
+                    $("#locationTableBody").html(`
+                        <tr>
+                            <td colspan="7"
+                                class="text-center text-muted">
+                                No stock locations found.
+                            </td>
+                        </tr>
+                    `);
+
+                    return;
+                }
+
+                let html = "";
+
+                locationsCache.forEach(item => {
+
+                    html += `
+                        <tr>
+
+                            <td class="fw-semibold">
+                                ${escapeHtml(item.name)}
+                            </td>
+
+                            <td>${escapeHtml(item.code)}</td>
+
+                            <td>${escapeHtml(item.city)}</td>
+
+                            <td>${escapeHtml(item.state)}</td>
+
+                            <td>
+                                ${item.is_default
+                                    ? '<span class="badge bg-primary">Default</span>'
+                                    : '-'}
+                            </td>
+
+                            <td>
+                                ${item.is_active
+                                    ? '<span class="badge bg-success">Active</span>'
+                                    : '<span class="badge bg-secondary">Inactive</span>'}
+                            </td>
+
+                            <td>
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-primary edit-location"
+                                        data-id="${Number(item.id)}">
+                                    <i class="bi bi-pencil"></i>
+                                    Edit
+                                </button>
+
+                                <button type="button"
+                                        class="btn btn-sm ${item.is_active ? 'btn-outline-danger' : 'btn-outline-success'} toggle-location"
+                                        data-id="${Number(item.id)}"
+                                        data-active="${item.is_active}">
+                                    ${item.is_active ? 'Deactivate' : 'Activate'}
+                                </button>
+                            </td>
+
+                        </tr>
+                    `;
+                });
+
+                $("#locationTableBody").html(html);
+
+            })
+
+            .fail(function (xhr) {
+
+                console.error(xhr.responseText);
+
+                $("#locationTableBody").html(`
+                    <tr>
+                        <td colspan="7"
+                            class="text-center text-danger">
+                            Unable to load locations.
+                        </td>
+                    </tr>
+                `);
+
+            });
+    }
+
+
+    // -------------------------------------------------
+    // CREATE / UPDATE LOCATION
+    // -------------------------------------------------
+
     $("#locationForm").on("submit", function (e) {
+
         e.preventDefault();
 
-        const data = Object.fromEntries(
-            new FormData(this).entries()
-        );
+        const locationId = $("#locationId").val();
 
-        data.is_default = $("#isDefault").is(":checked");
-        data.is_active = true;
+        const data = {
+
+            name: $("#locationName").val().trim(),
+            code: $("#locationCode").val().trim(),
+            address: $("#locationAddress").val().trim(),
+            city: $("#locationCity").val().trim(),
+            state: $("#locationState").val().trim(),
+            pincode: $("#locationPincode").val().trim(),
+
+            is_default: $("#isDefault").is(":checked"),
+            is_active: $("#isActive").is(":checked")
+
+        };
+
+        const method = locationId ? "PATCH" : "POST";
+
+        const url = locationId
+            ? API + locationId + "/"
+            : API;
+
+        $("#saveLocationBtn").prop("disabled", true);
 
         $.ajax({
-            url: API,
-            method: "POST",
+
+            url: url,
+            method: method,
             contentType: "application/json",
             data: JSON.stringify(data),
+
             headers: {
                 "X-CSRFToken": csrfToken()
             },
+
             success: function () {
-                $("#locationMessage").html(`
-                    <div class="alert alert-success">
-                        Stock location created successfully.
-                    </div>
-                `);
-                $("#locationForm")[0].reset();
+
+                showMessage(
+                    locationId
+                        ? "Stock location updated successfully."
+                        : "Stock location created successfully.",
+                    "success"
+                );
+
+                resetForm();
+
                 loadLocations();
+
             },
+
             error: function (xhr) {
+
                 console.error(xhr.responseJSON);
-                $("#locationMessage").html(`
-                    <div class="alert alert-danger">
-                        ${escapeHtml(JSON.stringify(xhr.responseJSON || {}))}
-                    </div>
-                `);
+
+                showMessage(
+                    getErrorMessage(xhr),
+                    "danger"
+                );
+
+            },
+
+            complete: function () {
+
+                $("#saveLocationBtn").prop("disabled", false);
+
             }
+
         });
+
     });
 
+
+    // -------------------------------------------------
+    // EDIT LOCATION
+    // -------------------------------------------------
+
+    $(document).on("click", ".edit-location", function () {
+
+        const id = Number($(this).data("id"));
+
+        const item = locationsCache.find(
+            location => Number(location.id) === id
+        );
+
+        if (!item) {
+            showMessage("Location not found.", "danger");
+            return;
+        }
+
+        $("#locationId").val(item.id);
+
+        $("#locationName").val(item.name);
+        $("#locationCode").val(item.code);
+        $("#locationAddress").val(item.address);
+        $("#locationCity").val(item.city);
+        $("#locationState").val(item.state);
+        $("#locationPincode").val(item.pincode);
+
+        $("#isDefault").prop("checked", item.is_default);
+        $("#isActive").prop("checked", item.is_active);
+
+        $("#locationFormTitle").text("Edit Stock Location");
+
+        $("#saveLocationBtn").html(
+            '<i class="bi bi-check-circle me-1"></i> Update Location'
+        );
+
+        $("#cancelEditBtn").removeClass("d-none");
+
+        $("html, body").animate({
+            scrollTop: $("#locationForm").offset().top - 100
+        }, 300);
+
+    });
+
+
+    // -------------------------------------------------
+    // CANCEL EDIT
+    // -------------------------------------------------
+
+    $("#cancelEditBtn").on("click", function () {
+
+        resetForm();
+
+        $("#locationMessage").empty();
+
+    });
+
+
+    // -------------------------------------------------
+    // ACTIVATE / DEACTIVATE LOCATION
+    // -------------------------------------------------
+
+    $(document).on("click", ".toggle-location", function () {
+
+        const id = Number($(this).data("id"));
+
+        const currentlyActive =
+            String($(this).attr("data-active")) === "true";
+
+        const newStatus = !currentlyActive;
+
+        const action = newStatus ? "activate" : "deactivate";
+
+        if (!confirm(`Are you sure you want to ${action} this location?`)) {
+            return;
+        }
+
+        $.ajax({
+
+            url: API + id + "/",
+            method: "PATCH",
+
+            contentType: "application/json",
+
+            data: JSON.stringify({
+                is_active: newStatus
+            }),
+
+            headers: {
+                "X-CSRFToken": csrfToken()
+            },
+
+            success: function () {
+
+                showMessage(
+                    `Location ${action}d successfully.`,
+                    "success"
+                );
+
+                loadLocations();
+
+            },
+
+            error: function (xhr) {
+
+                showMessage(
+                    getErrorMessage(xhr),
+                    "danger"
+                );
+
+            }
+
+        });
+
+    });
+
+
+    // -------------------------------------------------
+    // REFRESH
+    // -------------------------------------------------
+
+    $("#refreshLocationsBtn").on("click", function () {
+
+        loadLocations();
+
+    });
+
+
+    // INITIAL LOAD
     loadLocations();
+
 });
+
 </script>
+
 {% endblock %}

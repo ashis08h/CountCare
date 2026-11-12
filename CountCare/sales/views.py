@@ -61,6 +61,9 @@ from sales.services.inventory_service import (
 )
 
 
+from django.db import transaction
+from rest_framework.generics import RetrieveUpdateAPIView
+
 # =========================================================
 # INVENTORY API PERMISSION MIXIN
 # =========================================================
@@ -129,8 +132,101 @@ class StockLocationListCreateAPIView(
             .order_by("name")
         )
 
+    @transaction.atomic
     def perform_create(self, serializer):
-        serializer.save(company=self.get_company())
+
+        company = self.get_company()
+
+        if serializer.validated_data.get("is_default", False):
+
+            StockLocation.objects.filter(
+                company=company,
+                is_default=True,
+            ).update(is_default=False)
+
+        serializer.save(company=company)
+
+
+class StockLocationDetailAPIView(
+    InventoryPermissionMixin,
+    RetrieveUpdateAPIView,
+):
+
+    serializer_class = StockLocationSerializer
+
+    permission_map = {
+        "GET": "inventory_view",
+        "PUT": "inventory_change",
+        "PATCH": "inventory_change",
+    }
+
+    def get_queryset(self):
+
+        return StockLocation.objects.filter(
+            company=self.get_company()
+        )
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+
+        company = self.get_company()
+
+        is_default = serializer.validated_data.get(
+            "is_default",
+            serializer.instance.is_default,
+        )
+
+        is_active = serializer.validated_data.get(
+            "is_active",
+            serializer.instance.is_active,
+        )
+
+        location = serializer.instance
+
+        if is_default and not is_active:
+            raise ValidationError({
+                "is_default": "An inactive location cannot be the default location."
+            })
+
+        # Do not deactivate a location containing stock.
+        if not is_active:
+
+            has_stock = InventoryStock.objects.filter(
+                company=company,
+                location=location,
+                quantity_on_hand__gt=0,
+            ).exists()
+
+            has_registered_machines = CustomerMachine.objects.filter(
+                company=company,
+                location=location,
+                status__in=[
+                    CustomerMachine.MachineStatus.IN_STOCK,
+                    CustomerMachine.MachineStatus.RESERVED,
+                    CustomerMachine.MachineStatus.UNDER_REPAIR,
+                ],
+            ).exists()
+
+            if has_stock or has_registered_machines:
+                raise ValidationError({
+                    "is_active": (
+                        "This location cannot be deactivated because "
+                        "it still contains inventory or registered machines. "
+                        "Transfer the machines to another location first."
+                    )
+                })
+
+        # Only one default location per company.
+        if is_default:
+
+            StockLocation.objects.filter(
+                company=company,
+                is_default=True,
+            ).exclude(
+                pk=location.pk
+            ).update(is_default=False)
+
+        serializer.save()
 
 
 # =========================================================

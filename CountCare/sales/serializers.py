@@ -17,10 +17,58 @@ class StockLocationSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockLocation
         fields = [
-            "id", "name", "code", "address",
-            "city", "state", "pincode",
-            "is_default", "is_active",
+            "id",
+            "name",
+            "code",
+            "address",
+            "city",
+            "state",
+            "pincode",
+            "is_default",
+            "is_active",
         ]
+        read_only_fields = ["id"]
+
+    def validate_code(self, value):
+
+        value = value.strip().upper()
+
+        request = self.context.get("request")
+        company = request.company_membership.company
+
+        queryset = StockLocation.objects.filter(
+            company=company,
+            code__iexact=value,
+        )
+
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        if queryset.exists():
+            raise serializers.ValidationError(
+                "This location code already exists in your company."
+            )
+
+        return value
+
+    def validate(self, attrs):
+
+        is_default = attrs.get(
+            "is_default",
+            getattr(self.instance, "is_default", False),
+        )
+
+        is_active = attrs.get(
+            "is_active",
+            getattr(self.instance, "is_active", True),
+        )
+
+        if is_default and not is_active:
+            raise serializers.ValidationError({
+                "is_default": "An inactive location cannot be the default location."
+            })
+
+        return attrs
 
 
 class MachineProductSerializer(serializers.ModelSerializer):
