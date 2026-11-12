@@ -1,7 +1,5 @@
+
 from django.db import models
-
-# Create your models here.
-
 from django.conf import settings
 import uuid
 
@@ -161,6 +159,15 @@ class CustomerImportBatch(models.Model):
         COMPLETED = "COMPLETED", "Completed"
         FAILED = "FAILED", "Failed"
 
+    # Company ownership of import batch
+    company = models.ForeignKey(
+        "accounts.Company",
+        on_delete=models.PROTECT,
+        related_name="customer_import_batches",
+        null=True,
+        blank=True,
+    )
+
     file_name = models.CharField(max_length=255)
 
     file_type = models.CharField(max_length=10)
@@ -245,4 +252,3 @@ class CustomerImportRow(models.Model):
 
     def __str__(self):
         return f"Batch {self.batch_id} - Row {self.row_number}"
-

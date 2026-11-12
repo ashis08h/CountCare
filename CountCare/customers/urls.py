@@ -1,8 +1,16 @@
+
 from django.urls import path
 
-from customers.views.frontend_views import customer_management_page,\
-    customer_detail_page, customer_import_page, customer_import_history_page
+# Frontend views
+from customers.views.frontend_views import (
+    dashboard_page,
+    customer_management_page,
+    customer_detail_page,
+    customer_import_page,
+    customer_import_history_page,
+)
 
+# Customer API views
 from customers.views.customer_views import (
     CustomerListAPIView,
     CustomerCreateAPIView,
@@ -12,6 +20,7 @@ from customers.views.customer_views import (
     CustomerAddressListAPIView,
 )
 
+# Customer import views
 from customers.views.customer_import_views import (
     CustomerImportTemplateAPIView,
     CustomerImportPreviewAPIView,
@@ -19,6 +28,7 @@ from customers.views.customer_import_views import (
     CustomerImportConfirmAPIView,
 )
 
+# Customer import history views
 from customers.views.customer_import_history_views import (
     CustomerImportHistoryAPIView,
     CustomerImportHistoryDetailAPIView,
@@ -26,19 +36,17 @@ from customers.views.customer_import_history_views import (
     CustomerImportOriginalDataAPIView,
 )
 
+# Customer export view
 from customers.views.customer_export_views import (
     CustomerExportAPIView,
 )
 
-from customers.views.frontend_views import (
-    dashboard_page,
-    customer_management_page,
-    customer_detail_page,
-    customer_import_page,
-    customer_import_history_page,
-)
 
 urlpatterns = [
+
+    # =====================================================
+    # DASHBOARD
+    # =====================================================
 
     path(
         "dashboard/",
@@ -46,30 +54,30 @@ urlpatterns = [
         name="dashboard",
     ),
 
-    # Customer Import History
+    # =====================================================
+    # CUSTOMER FRONTEND PAGES
+    # =====================================================
 
     path(
-        "customer-imports/history/",
-        CustomerImportHistoryAPIView.as_view(),
-        name="customer-import-history",
+        "customer-management/",
+        customer_management_page,
+        name="customer-management",
     ),
 
     path(
-        "customer-imports/history/<int:batch_id>/",
-        CustomerImportHistoryDetailAPIView.as_view(),
-        name="customer-import-history-detail",
+        "customer-management/<int:customer_id>/",
+        customer_detail_page,
+        name="customer-detail-page",
     ),
 
-    path(
-        "customer-imports/history/<int:batch_id>/failed-report/",
-        CustomerImportFailedReportAPIView.as_view(),
-        name="customer-import-failed-report",
-    ),
+    # =====================================================
+    # CUSTOMER IMPORT FRONTEND PAGES
+    # =====================================================
 
     path(
-        "customer-imports/history/<int:batch_id>/original-data/",
-        CustomerImportOriginalDataAPIView.as_view(),
-        name="customer-import-original-data",
+        "customer-import/",
+        customer_import_page,
+        name="customer-import-page",
     ),
 
     path(
@@ -77,6 +85,60 @@ urlpatterns = [
         customer_import_history_page,
         name="customer-import-history-page",
     ),
+
+    # =====================================================
+    # CUSTOMER APIs
+    # =====================================================
+
+    path(
+        "customers/",
+        CustomerListAPIView.as_view(),
+        name="customer-list",
+    ),
+
+    path(
+        "customers/create/",
+        CustomerCreateAPIView.as_view(),
+        name="customer-create",
+    ),
+
+    path(
+        "customers/<int:pk>/",
+        CustomerDetailAPIView.as_view(),
+        name="customer-detail",
+    ),
+
+    path(
+        "customers/<int:pk>/deactivate/",
+        CustomerDeactivateAPIView.as_view(),
+        name="customer-deactivate",
+    ),
+
+    path(
+        "customers/<int:pk>/activate/",
+        CustomerActivateAPIView.as_view(),
+        name="customer-activate",
+    ),
+
+    path(
+        "customers/<int:pk>/addresses/",
+        CustomerAddressListAPIView.as_view(),
+        name="customer-addresses",
+    ),
+
+    # =====================================================
+    # CUSTOMER EXPORT
+    # =====================================================
+
+    path(
+        "customers/export/",
+        CustomerExportAPIView.as_view(),
+        name="customer-export",
+    ),
+
+    # =====================================================
+    # CUSTOMER IMPORT APIs
+    # =====================================================
 
     path(
         "customer-imports/template/",
@@ -102,36 +164,32 @@ urlpatterns = [
         name="customer-import-confirm",
     ),
 
-    # Frontend
+    # =====================================================
+    # CUSTOMER IMPORT HISTORY APIs
+    # =====================================================
+
     path(
-        "customer-management/",
-        customer_management_page,
-        name="customer-management",
+        "customer-imports/history/",
+        CustomerImportHistoryAPIView.as_view(),
+        name="customer-import-history",
     ),
 
     path(
-        "customer-management/<int:customer_id>/",
-        customer_detail_page,
-        name="customer-detail-page",
+        "customer-imports/history/<int:batch_id>/",
+        CustomerImportHistoryDetailAPIView.as_view(),
+        name="customer-import-history-detail",
     ),
 
     path(
-        "customer-import/",
-        customer_import_page,
-        name="customer-import-page",
+        "customer-imports/history/<int:batch_id>/failed-report/",
+        CustomerImportFailedReportAPIView.as_view(),
+        name="customer-import-failed-report",
     ),
 
     path(
-        "customers/export/",
-        CustomerExportAPIView.as_view(),
-        name="customer-export",
+        "customer-imports/history/<int:batch_id>/original-data/",
+        CustomerImportOriginalDataAPIView.as_view(),
+        name="customer-import-original-data",
     ),
 
-    # Customer APIs
-    path("customers/", CustomerListAPIView.as_view(), name="customer-list"),
-    path("customers/create/", CustomerCreateAPIView.as_view(), name="customer-create"),
-    path("customers/<int:pk>/", CustomerDetailAPIView.as_view(), name="customer-detail"),
-    path("customers/<int:pk>/deactivate/", CustomerDeactivateAPIView.as_view(), name="customer-deactivate"),
-    path("customers/<int:pk>/activate/", CustomerActivateAPIView.as_view(), name="customer-activate"),
-    path("customers/<int:pk>/addresses/", CustomerAddressListAPIView.as_view(), name="customer-addresses"),
 ]

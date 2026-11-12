@@ -1,12 +1,10 @@
-
 {% load static %}
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% block title %}CashCount ERP{% endblock %}</title>
 
     <link
@@ -69,34 +67,64 @@
 
         </nav>
 
-        <div class="sidebar-section">FUTURE MODULES</div>
+        <!-- INVENTORY AND SALES MODULES -->
+        <div class="sidebar-section">INVENTORY & SALES</div>
+
+        <nav class="sidebar-nav">
+
+            <a href="{% url 'inventory-dashboard' %}"
+               class="nav-link {% if request.resolver_match.url_name == 'inventory-dashboard' %}active{% endif %}">
+                <i class="bi bi-boxes"></i>
+                <span>Inventory Dashboard</span>
+            </a>
+
+            <a href="{% url 'sales-product-management' %}"
+               class="nav-link {% if request.resolver_match.url_name == 'sales-product-management' %}active{% endif %}">
+                <i class="bi bi-box-seam"></i>
+                <span>Product Management</span>
+            </a>
+
+            <a href="{% url 'sales-stock-locations-page' %}"
+               class="nav-link {% if request.resolver_match.url_name == 'sales-stock-locations-page' %}active{% endif %}">
+                <i class="bi bi-geo-alt"></i>
+                <span>Stock Locations</span>
+            </a>
+
+            <a href="{% url 'sales-machine-register' %}"
+               class="nav-link {% if request.resolver_match.url_name == 'sales-machine-register' %}active{% endif %}">
+                <i class="bi bi-upc-scan"></i>
+                <span>Machine Register</span>
+            </a>
+
+            <a href="{% url 'sales-stock-movements-page' %}"
+               class="nav-link {% if request.resolver_match.url_name == 'sales-stock-movements-page' %}active{% endif %}">
+                <i class="bi bi-arrow-left-right"></i>
+                <span>Stock Movements</span>
+            </a>
+
+        </nav>
+
+        <!-- FUTURE MODULES -->
+        <div class="sidebar-section">UPCOMING MODULES</div>
 
         <nav class="sidebar-nav">
 
             <a href="#" class="nav-link disabled-link">
-                <i class="bi bi-box-seam"></i>
-                <span>Product Management</span>
-                <small>Coming soon</small>
-            </a>
-
-            <a href="#" class="nav-link disabled-link">
-                <i class="bi bi-boxes"></i>
-                <span>Inventory</span>
-            </a>
-
-            <a href="#" class="nav-link disabled-link">
                 <i class="bi bi-receipt"></i>
                 <span>Quotations</span>
+                <small>Coming soon</small>
             </a>
 
             <a href="#" class="nav-link disabled-link">
                 <i class="bi bi-cart3"></i>
                 <span>Sales Orders</span>
+                <small>Coming soon</small>
             </a>
 
             <a href="#" class="nav-link disabled-link">
                 <i class="bi bi-cash-stack"></i>
                 <span>Payments</span>
+                <small>Coming soon</small>
             </a>
 
         </nav>
@@ -122,7 +150,7 @@
 
             <div class="header-left">
 
-                <button class="sidebar-toggle" id="sidebarToggle">
+                <button class="sidebar-toggle" id="sidebarToggle" type="button">
                     <i class="bi bi-list"></i>
                 </button>
 
@@ -160,6 +188,7 @@
                 </div>
 
             </div>
+
             <form method="POST" action="{% url 'logout' %}">
                 {% csrf_token %}
 
@@ -192,8 +221,11 @@
 </div>
 
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     // Current date
     document.getElementById("currentDate").textContent =

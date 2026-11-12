@@ -20,6 +20,7 @@ from .serializers import (
     StaffListSerializer,
     RoleSerializer,
 )
+from django.utils.http import url_has_allowed_host_and_scheme
 
 
 # --------------------------------------------------
@@ -266,9 +267,13 @@ def login_view(request):
             else:
                 login(request, user)
 
-                next_url = request.GET.get("next")
+                next_url = request.POST.get("next") or request.GET.get("next")
 
-                if next_url and next_url.startswith("/"):
+                if next_url and url_has_allowed_host_and_scheme(
+                        url=next_url,
+                        allowed_hosts={request.get_host()},
+                        require_https=request.is_secure(),
+                ):
                     return redirect(next_url)
 
                 return redirect("dashboard")
@@ -404,14 +409,26 @@ class StaffDetailAPIView(APIView):
         is_active = request.data.get("is_active")
 
         if is_active is not None:
+
             if not isinstance(is_active, bool):
                 return Response(
-                    {"detail": "is_active must be true or false."},
+                    {
+                        "detail": "is_active must be true or false."
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            employee.is_active = is_active
-            employee.save(update_fields=["is_active"])
+            with transaction.atomic():
+
+                employee.is_active = is_active
+                employee.save(
+                    update_fields=["is_active"]
+                )
+
+                employee.user.is_active = is_active
+                employee.user.save(
+                    update_fields=["is_active"]
+                )
 
         role_id = request.data.get("role_id")
 

@@ -1,19 +1,18 @@
 
-from django.db.models import Q
 from django.shortcuts import get_object_or_404
 
 from rest_framework import generics, status, filters
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.exceptions import ValidationError
-from customers.permissions import ToggleAPIPermission
 
 from django_filters.rest_framework import DjangoFilterBackend
 
 from customers.models import Customer
 from customers.serializers import CustomerSerializer
+from customers.permissions import ToggleAPIPermission
+
+from accounts.permissions import CashCountPermission
 
 
 # --------------------------------------------------
@@ -30,14 +29,75 @@ class CustomerPagination(PageNumberPagination):
 
 
 # --------------------------------------------------
-# Customer List API
+# Company Scoped Customer API Mixin
 # --------------------------------------------------
 
-class CustomerListAPIView(generics.ListAPIView):
+class CustomerCompanyMixin:
+    """
+    Common functionality for all customer APIs.
+
+    1. Requires an active company membership.
+    2. Checks the required role permission.
+    3. Restricts customer access to the logged-in user's company.
+    """
+
+    permission_classes = [
+        ToggleAPIPermission,
+        CashCountPermission,
+    ]
+
+    permission_map = {
+        "GET": "customers_view",
+        "POST": "customers_add",
+        "PUT": "customers_change",
+        "PATCH": "customers_change",
+        "DELETE": "customers_delete",
+    }
+
+    def get_permissions(self):
+
+        self.required_permission = self.permission_map.get(
+            self.request.method
+        )
+
+        return super().get_permissions()
+
+    def get_company(self):
+
+        membership = getattr(
+            self.request,
+            "company_membership",
+            None,
+        )
+
+        if not membership:
+            return None
+
+        return membership.company
+
+    def get_company_customer_queryset(self):
+
+        company = self.get_company()
+
+        if not company:
+            return Customer.objects.none()
+
+        return Customer.objects.filter(
+            company=company
+        )
+
+
+# --------------------------------------------------
+# Customer List API
+# GET /api/customers/
+# --------------------------------------------------
+
+class CustomerListAPIView(
+    CustomerCompanyMixin,
+    generics.ListAPIView,
+):
 
     serializer_class = CustomerSerializer
-
-    permission_classes = [ToggleAPIPermission]
 
     pagination_class = CustomerPagination
 
@@ -75,57 +135,65 @@ class CustomerListAPIView(generics.ListAPIView):
 
     def get_queryset(self):
 
-        return Customer.objects.all().prefetch_related(
+        return self.get_company_customer_queryset().prefetch_related(
             "addresses"
         )
 
 
 # --------------------------------------------------
 # Customer Create API
+# POST /api/customers/create/
 # --------------------------------------------------
 
-class CustomerCreateAPIView(generics.CreateAPIView):
+class CustomerCreateAPIView(
+    CustomerCompanyMixin,
+    generics.CreateAPIView,
+):
 
     serializer_class = CustomerSerializer
 
-    permission_classes = [ToggleAPIPermission]
-
     def perform_create(self, serializer):
-        user = self.request.user
+
+        membership = self.request.company_membership
 
         serializer.save(
-            created_by=user if user.is_authenticated else None
+            company=membership.company,
+            created_by=self.request.user,
         )
 
 
 # --------------------------------------------------
 # Customer Retrieve API
+# GET /api/customers/<pk>/
 # --------------------------------------------------
 
-class CustomerRetrieveAPIView(generics.RetrieveAPIView):
+class CustomerRetrieveAPIView(
+    CustomerCompanyMixin,
+    generics.RetrieveAPIView,
+):
 
     serializer_class = CustomerSerializer
-
-    permission_classes = [ToggleAPIPermission]
 
     lookup_field = "pk"
 
     def get_queryset(self):
 
-        return Customer.objects.prefetch_related(
+        return self.get_company_customer_queryset().prefetch_related(
             "addresses"
         )
 
 
 # --------------------------------------------------
 # Customer Update API
+# PUT / PATCH /api/customers/<pk>/update/
 # --------------------------------------------------
 
-class CustomerUpdateAPIView(generics.UpdateAPIView):
+class CustomerUpdateAPIView(
+    CustomerCompanyMixin,
+    generics.UpdateAPIView,
+):
 
     serializer_class = CustomerSerializer
-
-    permission_classes = [ToggleAPIPermission]
 
     lookup_field = "pk"
 
@@ -138,7 +206,7 @@ class CustomerUpdateAPIView(generics.UpdateAPIView):
 
     def get_queryset(self):
 
-        return Customer.objects.prefetch_related(
+        return self.get_company_customer_queryset().prefetch_related(
             "addresses"
         )
 
@@ -148,11 +216,12 @@ class CustomerUpdateAPIView(generics.UpdateAPIView):
 # GET / PUT / PATCH
 # --------------------------------------------------
 
-class CustomerDetailAPIView(generics.RetrieveUpdateAPIView):
+class CustomerDetailAPIView(
+    CustomerCompanyMixin,
+    generics.RetrieveUpdateAPIView,
+):
 
     serializer_class = CustomerSerializer
-
-    permission_classes = [ToggleAPIPermission]
 
     lookup_field = "pk"
 
@@ -166,24 +235,30 @@ class CustomerDetailAPIView(generics.RetrieveUpdateAPIView):
 
     def get_queryset(self):
 
-        return Customer.objects.prefetch_related(
+        return self.get_company_customer_queryset().prefetch_related(
             "addresses"
         )
 
 
 # --------------------------------------------------
 # Customer Deactivate API
+# POST /api/customers/<pk>/deactivate/
 # --------------------------------------------------
 
-class CustomerDeactivateAPIView(APIView):
+class CustomerDeactivateAPIView(
+    CustomerCompanyMixin,
+    APIView,
+):
 
-    permission_classes = [ToggleAPIPermission]
+    permission_map = {
+        "POST": "customers_change",
+    }
 
     def post(self, request, pk):
 
         customer = get_object_or_404(
-            Customer,
-            pk=pk
+            self.get_company_customer_queryset(),
+            pk=pk,
         )
 
         if customer.status == Customer.Status.INACTIVE:
@@ -192,7 +267,7 @@ class CustomerDeactivateAPIView(APIView):
                 {
                     "message": "Customer is already inactive."
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         customer.status = Customer.Status.INACTIVE
@@ -200,7 +275,7 @@ class CustomerDeactivateAPIView(APIView):
         customer.save(
             update_fields=[
                 "status",
-                "updated_at"
+                "updated_at",
             ]
         )
 
@@ -211,23 +286,29 @@ class CustomerDeactivateAPIView(APIView):
                 "customer_code": customer.customer_code,
                 "status": customer.status,
             },
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
 
 
 # --------------------------------------------------
 # Customer Activate API
+# POST /api/customers/<pk>/activate/
 # --------------------------------------------------
 
-class CustomerActivateAPIView(APIView):
+class CustomerActivateAPIView(
+    CustomerCompanyMixin,
+    APIView,
+):
 
-    permission_classes = [ToggleAPIPermission]
+    permission_map = {
+        "POST": "customers_change",
+    }
 
     def post(self, request, pk):
 
         customer = get_object_or_404(
-            Customer,
-            pk=pk
+            self.get_company_customer_queryset(),
+            pk=pk,
         )
 
         if customer.status == Customer.Status.ACTIVE:
@@ -236,7 +317,7 @@ class CustomerActivateAPIView(APIView):
                 {
                     "message": "Customer is already active."
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         customer.status = Customer.Status.ACTIVE
@@ -244,7 +325,7 @@ class CustomerActivateAPIView(APIView):
         customer.save(
             update_fields=[
                 "status",
-                "updated_at"
+                "updated_at",
             ]
         )
 
@@ -255,28 +336,34 @@ class CustomerActivateAPIView(APIView):
                 "customer_code": customer.customer_code,
                 "status": customer.status,
             },
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
 
 
 # --------------------------------------------------
 # Customer Address List API
+# GET /api/customers/<pk>/addresses/
 # --------------------------------------------------
 
-class CustomerAddressListAPIView(APIView):
+class CustomerAddressListAPIView(
+    CustomerCompanyMixin,
+    APIView,
+):
 
-    permission_classes = [ToggleAPIPermission]
+    permission_map = {
+        "GET": "customers_view",
+    }
 
     def get(self, request, pk):
 
         customer = get_object_or_404(
-            Customer,
-            pk=pk
+            self.get_company_customer_queryset(),
+            pk=pk,
         )
 
         serializer = CustomerSerializer(
             customer,
-            context={"request": request}
+            context={"request": request},
         )
 
         return Response(
@@ -284,5 +371,5 @@ class CustomerAddressListAPIView(APIView):
                 "customer_code": customer.customer_code,
                 "addresses": serializer.data["addresses"],
             },
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )

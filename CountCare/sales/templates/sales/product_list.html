@@ -1,0 +1,241 @@
+
+{% extends "customers/base.html" %}
+
+{% block title %}Machine Products | CashCount{% endblock %}
+{% block page_title %}Machine Products{% endblock %}
+{% block page_subtitle %}Manage currency-counting machine models, pricing and warranty.{% endblock %}
+
+{% block content %}
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0">Add Machine Product</h5>
+    </div>
+
+    <div class="card-body">
+        <form id="productForm">
+            <div class="row g-3">
+
+                <div class="col-md-4">
+                    <label class="form-label">Product Name *</label>
+                    <input type="text" class="form-control" name="name" required>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Brand</label>
+                    <input type="text" class="form-control" name="brand">
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Model Number *</label>
+                    <input type="text" class="form-control" name="model_number" required>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">SKU *</label>
+                    <input type="text" class="form-control" name="sku" required>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">HSN Code</label>
+                    <input type="text" class="form-control" name="hsn_code">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">MRP (₹) *</label>
+                    <input type="number" class="form-control" name="mrp"
+                           min="0" step="0.01" required>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Selling Price (₹, before GST) *</label>
+                    <input type="number" class="form-control" name="selling_price"
+                           min="0" step="0.01" required>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">GST Rate (%) *</label>
+                    <input type="number" class="form-control" name="gst_rate"
+                           min="0" max="100" step="0.01" value="18" required>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Warranty (months) *</label>
+                    <input type="number" class="form-control" name="warranty_months"
+                           min="0" value="12" required>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Reorder Level</label>
+                    <input type="number" class="form-control" name="reorder_level"
+                           min="0" value="5">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Description</label>
+                    <input type="text" class="form-control" name="description">
+                </div>
+
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-1"></i> Save Product
+                    </button>
+                    <button type="reset" class="btn btn-light border">
+                        Clear
+                    </button>
+                </div>
+
+            </div>
+        </form>
+
+        <div id="productMessage" class="mt-3"></div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0">Product Catalogue</h5>
+    </div>
+
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Product</th>
+                        <th>Brand</th>
+                        <th>Model</th>
+                        <th>SKU</th>
+                        <th>Price Before GST</th>
+                        <th>GST</th>
+                        <th>Warranty</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="productTableBody">
+                    <tr>
+                        <td colspan="8" class="text-center text-muted">
+                            Loading products...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(function () {
+
+    const API = "/api/sales/products/";
+
+    function csrfToken() {
+        return $('meta[name="csrf-token"]').attr("content")
+            || document.cookie.split("; ")
+                .find(row => row.startsWith("csrftoken="))
+                ?.split("=")[1];
+    }
+
+    function escapeHtml(value) {
+        return $("<div>").text(value ?? "").html();
+    }
+
+    function loadProducts() {
+        $.get(API, function (response) {
+
+            const products = Array.isArray(response)
+                ? response
+                : (response.results || []);
+
+            if (!products.length) {
+                $("#productTableBody").html(`
+                    <tr><td colspan="8" class="text-center text-muted">
+                        No products added yet.
+                    </td></tr>
+                `);
+                return;
+            }
+
+            let html = "";
+
+            products.forEach(p => {
+                html += `
+                    <tr>
+                        <td class="fw-semibold">${escapeHtml(p.name)}</td>
+                        <td>${escapeHtml(p.brand)}</td>
+                        <td>${escapeHtml(p.model_number)}</td>
+                        <td>${escapeHtml(p.sku)}</td>
+                        <td>₹${Number(p.selling_price).toFixed(2)}</td>
+                        <td>${p.gst_rate}%</td>
+                        <td>${p.warranty_months} months</td>
+                        <td>
+                            ${p.is_active
+                                ? '<span class="badge bg-success">Active</span>'
+                                : '<span class="badge bg-secondary">Inactive</span>'}
+                        </td>
+                    </tr>
+                `;
+            });
+
+            $("#productTableBody").html(html);
+
+        }).fail(function (xhr) {
+            console.error(xhr.responseText);
+            $("#productTableBody").html(`
+                <tr><td colspan="8" class="text-center text-danger">
+                    Unable to load products.
+                </td></tr>
+            `);
+        });
+    }
+
+    $("#productForm").on("submit", function (e) {
+        e.preventDefault();
+
+        const data = Object.fromEntries(
+            new FormData(this).entries()
+        );
+
+        data.mrp = Number(data.mrp).toFixed(2);
+        data.selling_price = Number(data.selling_price).toFixed(2);
+        data.gst_rate = Number(data.gst_rate).toFixed(2);
+        data.warranty_months = Number(data.warranty_months);
+        data.reorder_level = Number(data.reorder_level || 0);
+        data.is_active = true;
+
+        $.ajax({
+            url: API,
+            method: "POST",
+            contentType: "application/json",
+            data: JSON.stringify(data),
+            headers: {
+                "X-CSRFToken": csrfToken()
+            },
+            success: function () {
+                $("#productMessage").html(`
+                    <div class="alert alert-success">
+                        Product created successfully.
+                    </div>
+                `);
+                $("#productForm")[0].reset();
+                loadProducts();
+            },
+            error: function (xhr) {
+                console.error(xhr.responseJSON);
+                const errors = xhr.responseJSON || {};
+                $("#productMessage").html(`
+                    <div class="alert alert-danger">
+                        ${escapeHtml(JSON.stringify(errors))}
+                    </div>
+                `);
+            }
+        });
+    });
+
+    loadProducts();
+});
+</script>
+{% endblock %}

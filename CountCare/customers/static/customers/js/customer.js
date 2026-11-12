@@ -3,6 +3,65 @@ $(document).ready(function () {
 
     const API_BASE_URL = "/api/";
 
+     // ==========================================
+    // CSRF TOKEN HANDLING
+    // ==========================================
+
+    function getCSRFToken() {
+
+        // First try reading the token from the base template.
+        let token = $('meta[name="csrf-token"]').attr("content");
+
+        if (token && token !== "NOTPROVIDED") {
+            return token;
+        }
+
+        // Fallback: read the CSRF cookie.
+        const cookieValue = document.cookie
+            .split("; ")
+            .find(row => row.startsWith("csrftoken="));
+
+        return cookieValue
+            ? decodeURIComponent(cookieValue.split("=")[1])
+            : null;
+    }
+
+    // Automatically attach CSRF token to unsafe AJAX requests.
+    $.ajaxSetup({
+
+        beforeSend: function (xhr, settings) {
+
+            const method = (
+                settings.type || settings.method || "GET"
+            ).toUpperCase();
+
+            const safeMethods = [
+                "GET",
+                "HEAD",
+                "OPTIONS",
+                "TRACE"
+            ];
+
+            if (!safeMethods.includes(method)) {
+
+                const csrfToken = getCSRFToken();
+
+                if (csrfToken) {
+
+                    xhr.setRequestHeader(
+                        "X-CSRFToken",
+                        csrfToken
+                    );
+
+                } else {
+
+                    console.error("CSRF token is missing.");
+                }
+            }
+        }
+    });
+
+
     let currentPage = 1;
     let nextPageUrl = null;
     let previousPageUrl = null;

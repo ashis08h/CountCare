@@ -1,0 +1,209 @@
+
+{% extends "customers/base.html" %}
+
+{% block title %}Warehouses | CashCount{% endblock %}
+{% block page_title %}Stock Locations{% endblock %}
+{% block page_subtitle %}Manage warehouses, offices and machine storage locations.{% endblock %}
+
+{% block content %}
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0">Add Stock Location</h5>
+    </div>
+
+    <div class="card-body">
+        <form id="locationForm">
+            <div class="row g-3">
+
+                <div class="col-md-4">
+                    <label class="form-label">Location Name *</label>
+                    <input name="name" class="form-control" required>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Location Code *</label>
+                    <input name="code" class="form-control" required>
+                </div>
+
+                <div class="col-md-5">
+                    <label class="form-label">Address</label>
+                    <input name="address" class="form-control">
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">City</label>
+                    <input name="city" class="form-control">
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">State</label>
+                    <input name="state" class="form-control">
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">PIN Code</label>
+                    <input name="pincode" class="form-control" maxlength="10">
+                </div>
+
+                <div class="col-12">
+                    <div class="form-check">
+                        <input type="checkbox" name="is_default"
+                               id="isDefault" class="form-check-input">
+                        <label for="isDefault" class="form-check-label">
+                            Set as default location
+                        </label>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <button class="btn btn-primary" type="submit">
+                        <i class="bi bi-plus-circle me-1"></i> Save Location
+                    </button>
+                </div>
+
+            </div>
+        </form>
+
+        <div id="locationMessage" class="mt-3"></div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0">Warehouse List</h5>
+    </div>
+
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>Code</th>
+                        <th>City</th>
+                        <th>State</th>
+                        <th>Default</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="locationTableBody">
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">
+                            Loading locations...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(function () {
+
+    const API = "/api/sales/locations/";
+
+    function csrfToken() {
+        return $('meta[name="csrf-token"]').attr("content")
+            || document.cookie.split("; ")
+                .find(row => row.startsWith("csrftoken="))
+                ?.split("=")[1];
+    }
+
+    function escapeHtml(value) {
+        return $("<div>").text(value ?? "").html();
+    }
+
+    function loadLocations() {
+        $.get(API, function (response) {
+
+            const locations = Array.isArray(response)
+                ? response
+                : (response.results || []);
+
+            if (!locations.length) {
+                $("#locationTableBody").html(`
+                    <tr><td colspan="6" class="text-center text-muted">
+                        No stock locations found.
+                    </td></tr>
+                `);
+                return;
+            }
+
+            let html = "";
+
+            locations.forEach(item => {
+                html += `
+                    <tr>
+                        <td class="fw-semibold">${escapeHtml(item.name)}</td>
+                        <td>${escapeHtml(item.code)}</td>
+                        <td>${escapeHtml(item.city)}</td>
+                        <td>${escapeHtml(item.state)}</td>
+                        <td>${item.is_default
+                            ? '<span class="badge bg-primary">Default</span>'
+                            : '-'}</td>
+                        <td>${item.is_active
+                            ? '<span class="badge bg-success">Active</span>'
+                            : '<span class="badge bg-secondary">Inactive</span>'}</td>
+                    </tr>
+                `;
+            });
+
+            $("#locationTableBody").html(html);
+
+        }).fail(function (xhr) {
+            console.error(xhr.responseText);
+            $("#locationTableBody").html(`
+                <tr><td colspan="6" class="text-center text-danger">
+                    Unable to load locations.
+                </td></tr>
+            `);
+        });
+    }
+
+    $("#locationForm").on("submit", function (e) {
+        e.preventDefault();
+
+        const data = Object.fromEntries(
+            new FormData(this).entries()
+        );
+
+        data.is_default = $("#isDefault").is(":checked");
+        data.is_active = true;
+
+        $.ajax({
+            url: API,
+            method: "POST",
+            contentType: "application/json",
+            data: JSON.stringify(data),
+            headers: {
+                "X-CSRFToken": csrfToken()
+            },
+            success: function () {
+                $("#locationMessage").html(`
+                    <div class="alert alert-success">
+                        Stock location created successfully.
+                    </div>
+                `);
+                $("#locationForm")[0].reset();
+                loadLocations();
+            },
+            error: function (xhr) {
+                console.error(xhr.responseJSON);
+                $("#locationMessage").html(`
+                    <div class="alert alert-danger">
+                        ${escapeHtml(JSON.stringify(xhr.responseJSON || {}))}
+                    </div>
+                `);
+            }
+        });
+    });
+
+    loadLocations();
+});
+</script>
+{% endblock %}

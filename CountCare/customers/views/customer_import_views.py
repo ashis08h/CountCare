@@ -1,4 +1,3 @@
-
 from pathlib import Path
 
 from django.db import transaction
@@ -10,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated
 
 from openpyxl import Workbook
 
@@ -19,12 +19,18 @@ from customers.models import (
 )
 
 from customers.serializers import CustomerSerializer
+
 from customers.services.customer_import_service import (
     parse_uploaded_file,
 )
 
 from customers.permissions import ToggleAPIPermission
+from accounts.permissions import CashCountPermission
 
+
+# ---------------------------------------------------------
+# HELPER FUNCTIONS
+# ---------------------------------------------------------
 
 def make_json_safe(value):
     """Convert serializer errors into JSON-serializable values."""
@@ -36,7 +42,10 @@ def make_json_safe(value):
         }
 
     if isinstance(value, (list, tuple)):
-        return [make_json_safe(item) for item in value]
+        return [
+            make_json_safe(item)
+            for item in value
+        ]
 
     return str(value)
 
@@ -46,7 +55,6 @@ def get_row_errors(serializer):
 
 
 def batch_summary(batch):
-
     return {
         "batch_id": batch.id,
         "file_name": batch.file_name,
@@ -59,7 +67,6 @@ def batch_summary(batch):
 
 
 def row_summary(row):
-
     return {
         "row_number": row.row_number,
         "data": row.row_data,
@@ -69,9 +76,70 @@ def row_summary(row):
     }
 
 
-class CustomerImportTemplateAPIView(APIView):
+def get_company_batch_or_404(request, batch_id):
+    """
+    Return an import batch only if it belongs to
+    the currently logged-in user's company.
+    """
 
-    permission_classes = [ToggleAPIPermission]
+    membership = getattr(
+        request,
+        "company_membership",
+        None,
+    )
+
+    if not membership:
+        from django.http import Http404
+        raise Http404
+
+    return get_object_or_404(
+        CustomerImportBatch.objects.select_related(
+            "company",
+            "uploaded_by",
+        ),
+        id=batch_id,
+        company_id=membership.company_id,
+    )
+
+
+# ---------------------------------------------------------
+# BASE PERMISSION CLASS
+# ---------------------------------------------------------
+
+class CustomerImportPermissionMixin:
+    """
+    Applies authentication, API toggle permission
+    and company-level RBAC permission.
+    """
+
+    permission_classes = [
+        IsAuthenticated,
+        ToggleAPIPermission,
+        CashCountPermission,
+    ]
+
+    permission_map = {}
+
+    def get_permissions(self):
+        self.required_permission = self.permission_map.get(
+            self.request.method
+        )
+
+        return super().get_permissions()
+
+
+# ---------------------------------------------------------
+# DOWNLOAD IMPORT TEMPLATE
+# ---------------------------------------------------------
+
+class CustomerImportTemplateAPIView(
+    CustomerImportPermissionMixin,
+    APIView,
+):
+
+    permission_map = {
+        "GET": "customers_add",
+    }
 
     def get(self, request):
 
@@ -117,11 +185,23 @@ class CustomerImportTemplateAPIView(APIView):
         return response
 
 
-class CustomerImportPreviewAPIView(APIView):
+# ---------------------------------------------------------
+# UPLOAD AND PREVIEW IMPORT FILE
+# ---------------------------------------------------------
 
-    parser_classes = [MultiPartParser, FormParser]
+class CustomerImportPreviewAPIView(
+    CustomerImportPermissionMixin,
+    APIView,
+):
 
-    permission_classes = [ToggleAPIPermission]
+    parser_classes = [
+        MultiPartParser,
+        FormParser,
+    ]
+
+    permission_map = {
+        "POST": "customers_add",
+    }
 
     def post(self, request):
 
@@ -129,8 +209,10 @@ class CustomerImportPreviewAPIView(APIView):
 
         if not uploaded_file:
             return Response(
-                {"detail": "Please select an Excel or CSV file."},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "detail": "Please select an Excel or CSV file."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
@@ -138,24 +220,24 @@ class CustomerImportPreviewAPIView(APIView):
 
         except (ValueError, UnicodeDecodeError) as exc:
             return Response(
-                {"detail": str(exc)},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "detail": str(exc)
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user = request.user
+        membership = request.company_membership
 
-        uploaded_by = (
-            user if user.is_authenticated else None
-        )
-
+        # Create the import batch under the logged-in user's company.
         batch = CustomerImportBatch.objects.create(
+            company=membership.company,
             file_name=uploaded_file.name,
             file_type=Path(uploaded_file.name).suffix.lower(),
             total_rows=len(records),
             successful_rows=0,
             failed_rows=0,
             status="PENDING",
-            uploaded_by=uploaded_by,
+            uploaded_by=request.user,
         )
 
         row_objects = []
@@ -164,7 +246,9 @@ class CustomerImportPreviewAPIView(APIView):
 
             row_data = record["data"]
 
-            serializer = CustomerSerializer(data=row_data)
+            serializer = CustomerSerializer(
+                data=row_data
+            )
 
             if serializer.is_valid():
 
@@ -186,7 +270,9 @@ class CustomerImportPreviewAPIView(APIView):
                 )
             )
 
-        CustomerImportRow.objects.bulk_create(row_objects)
+        CustomerImportRow.objects.bulk_create(
+            row_objects
+        )
 
         valid_count = sum(
             row.status == "VALID"
@@ -212,22 +298,31 @@ class CustomerImportPreviewAPIView(APIView):
                     for row in row_objects
                 ],
             },
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_201_CREATED,
         )
 
 
-class CustomerImportBatchPreviewAPIView(APIView):
+# ---------------------------------------------------------
+# VIEW IMPORT BATCH PREVIEW
+# ---------------------------------------------------------
 
-    permission_classes = [ToggleAPIPermission]
+class CustomerImportBatchPreviewAPIView(
+    CustomerImportPermissionMixin,
+    APIView,
+):
+
+    permission_map = {
+        "GET": "customers_view",
+    }
 
     def get(self, request, batch_id):
 
-        batch = get_object_or_404(
-            CustomerImportBatch,
-            id=batch_id
+        batch = get_company_batch_or_404(
+            request,
+            batch_id,
         )
 
-        rows = batch.rows.all()
+        rows = batch.rows.all().order_by("row_number")
 
         return Response(
             {
@@ -237,20 +332,30 @@ class CustomerImportBatchPreviewAPIView(APIView):
                     for row in rows
                 ],
             },
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
 
 
-class CustomerImportConfirmAPIView(APIView):
+# ---------------------------------------------------------
+# CONFIRM AND PROCESS CUSTOMER IMPORT
+# ---------------------------------------------------------
 
-    permission_classes = [ToggleAPIPermission]
+class CustomerImportConfirmAPIView(
+    CustomerImportPermissionMixin,
+    APIView,
+):
+
+    permission_map = {
+        "POST": "customers_add",
+    }
 
     @transaction.atomic
     def post(self, request, batch_id):
 
         batch = get_object_or_404(
             CustomerImportBatch.objects.select_for_update(),
-            id=batch_id
+            id=batch_id,
+            company_id=request.company_membership.company_id,
         )
 
         if batch.status != "PENDING":
@@ -262,16 +367,26 @@ class CustomerImportConfirmAPIView(APIView):
                         "or cannot be imported."
                     )
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         batch.status = "PROCESSING"
-        batch.save(update_fields=["status"])
+
+        batch.save(
+            update_fields=["status"]
+        )
 
         imported_count = 0
-        failed_count = batch.rows.filter(status="INVALID").count()
 
-        for row in batch.rows.filter(status="VALID").order_by("row_number"):
+        failed_count = batch.rows.filter(
+            status="INVALID"
+        ).count()
+
+        valid_rows = batch.rows.filter(
+            status="VALID"
+        ).order_by("row_number")
+
+        for row in valid_rows:
 
             try:
 
@@ -281,12 +396,15 @@ class CustomerImportConfirmAPIView(APIView):
                         data=row.row_data
                     )
 
-                    serializer.is_valid(raise_exception=True)
+                    serializer.is_valid(
+                        raise_exception=True
+                    )
 
+                    # Always assign the batch company.
+                    # Never trust company information from uploaded data.
                     customer = serializer.save(
-                        created_by=(
-                            batch.uploaded_by
-                        )
+                        company=batch.company,
+                        created_by=batch.uploaded_by,
                     )
 
                     row.customer = customer
@@ -306,10 +424,15 @@ class CustomerImportConfirmAPIView(APIView):
             except ValidationError as exc:
 
                 row.status = "FAILED"
-                row.errors = make_json_safe(exc.detail)
+                row.errors = make_json_safe(
+                    exc.detail
+                )
 
                 row.save(
-                    update_fields=["status", "errors"]
+                    update_fields=[
+                        "status",
+                        "errors",
+                    ]
                 )
 
                 failed_count += 1
@@ -322,7 +445,10 @@ class CustomerImportConfirmAPIView(APIView):
                 ]
 
                 row.save(
-                    update_fields=["status", "errors"]
+                    update_fields=[
+                        "status",
+                        "errors",
+                    ]
                 )
 
                 failed_count += 1
@@ -344,5 +470,5 @@ class CustomerImportConfirmAPIView(APIView):
                 "message": "Customer import completed.",
                 "batch": batch_summary(batch),
             },
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )

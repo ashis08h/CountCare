@@ -1,24 +1,38 @@
 
+import csv
+import json
+
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated
 
 from openpyxl import Workbook
 
 from customers.models import CustomerImportBatch
 from customers.permissions import ToggleAPIPermission
 
+from accounts.permissions import CashCountPermission
+
+
+# --------------------------------------------------
+# Import History Pagination
+# --------------------------------------------------
 
 class ImportHistoryPagination(PageNumberPagination):
+
     page_size = 20
     page_size_query_param = "page_size"
     max_page_size = 100
 
+
+# --------------------------------------------------
+# Batch Response Data
+# --------------------------------------------------
 
 def get_batch_data(batch):
 
@@ -38,33 +52,86 @@ def get_batch_data(batch):
     }
 
 
+# --------------------------------------------------
+# Company Scoped Import Batch Helper
+# --------------------------------------------------
+
+def get_company_batches(request):
+
+    membership = getattr(
+        request,
+        "company_membership",
+        None,
+    )
+
+    if not membership:
+        return CustomerImportBatch.objects.none()
+
+    return CustomerImportBatch.objects.filter(
+        company=membership.company
+    ).select_related(
+        "uploaded_by",
+        "company",
+    )
+
+
+def get_company_batch_or_404(request, batch_id):
+
+    return get_object_or_404(
+        get_company_batches(request),
+        id=batch_id,
+    )
+
+
+# --------------------------------------------------
+# Customer Import History API
+# GET /api/customer-import-history/
+# Permission: customers_view
+# --------------------------------------------------
+
 class CustomerImportHistoryAPIView(APIView):
 
-    permission_classes = [ToggleAPIPermission]
+    permission_classes = [
+        IsAuthenticated,
+        ToggleAPIPermission,
+        CashCountPermission,
+    ]
+
+    required_permission = "customers_view"
 
     def get(self, request):
 
-        queryset = CustomerImportBatch.objects.all().order_by(
+        queryset = get_company_batches(request).order_by(
             "-created_at"
         )
 
         # Optional status filter
+
         batch_status = request.query_params.get("status")
 
         if batch_status:
-            queryset = queryset.filter(status=batch_status.upper())
+
+            queryset = queryset.filter(
+                status=batch_status.upper()
+            )
 
         # Optional file-name search
-        search = request.query_params.get("search")
+
+        search = request.query_params.get("search", "").strip()
 
         if search:
+
             queryset = queryset.filter(
                 file_name__icontains=search
             )
 
         paginator = ImportHistoryPagination()
 
-        page = paginator.paginate_queryset(queryset, request)
+        page = paginator.paginate_queryset(
+            queryset,
+            request,
+            view=self,
+        )
 
         results = [
             get_batch_data(batch)
@@ -74,18 +141,32 @@ class CustomerImportHistoryAPIView(APIView):
         return paginator.get_paginated_response(results)
 
 
+# --------------------------------------------------
+# Customer Import History Detail API
+# GET /api/customer-import-history/<batch_id>/
+# Permission: customers_view
+# --------------------------------------------------
+
 class CustomerImportHistoryDetailAPIView(APIView):
 
-    permission_classes = [ToggleAPIPermission]
+    permission_classes = [
+        IsAuthenticated,
+        ToggleAPIPermission,
+        CashCountPermission,
+    ]
+
+    required_permission = "customers_view"
 
     def get(self, request, batch_id):
 
-        batch = get_object_or_404(
-            CustomerImportBatch,
-            id=batch_id
+        batch = get_company_batch_or_404(
+            request,
+            batch_id,
         )
 
-        rows = batch.rows.all().order_by("row_number")
+        rows = batch.rows.all().order_by(
+            "row_number"
+        )
 
         row_data = []
 
@@ -105,15 +186,27 @@ class CustomerImportHistoryDetailAPIView(APIView):
         })
 
 
+# --------------------------------------------------
+# Customer Import Failed Report API
+# GET /api/customer-import-history/<batch_id>/failed-report/
+# Permission: customers_export
+# --------------------------------------------------
+
 class CustomerImportFailedReportAPIView(APIView):
 
-    permission_classes = [ToggleAPIPermission]
+    permission_classes = [
+        IsAuthenticated,
+        ToggleAPIPermission,
+        CashCountPermission,
+    ]
+
+    required_permission = "customers_export"
 
     def get(self, request, batch_id):
 
-        batch = get_object_or_404(
-            CustomerImportBatch,
-            id=batch_id
+        batch = get_company_batch_or_404(
+            request,
+            batch_id,
         )
 
         failed_rows = batch.rows.filter(
@@ -123,6 +216,7 @@ class CustomerImportFailedReportAPIView(APIView):
         workbook = Workbook()
 
         worksheet = workbook.active
+
         worksheet.title = "Failed Customers"
 
         headers = [
@@ -176,6 +270,7 @@ class CustomerImportFailedReportAPIView(APIView):
             ])
 
         # Set readable column widths
+
         for column in worksheet.columns:
 
             max_length = max(
@@ -208,25 +303,43 @@ class CustomerImportFailedReportAPIView(APIView):
         if isinstance(errors, dict):
 
             return "; ".join(
-                f"{field}: {', '.join(map(str, messages)) if isinstance(messages, list) else messages}"
+                (
+                    f"{field}: "
+                    f"{', '.join(map(str, messages)) if isinstance(messages, list) else messages}"
+                )
                 for field, messages in errors.items()
             )
 
         if isinstance(errors, list):
-            return "; ".join(map(str, errors))
+
+            return "; ".join(
+                map(str, errors)
+            )
 
         return str(errors or "")
 
 
+# --------------------------------------------------
+# Customer Import Original Data API
+# GET /api/customer-import-history/<batch_id>/original-data/
+# Permission: customers_export
+# --------------------------------------------------
+
 class CustomerImportOriginalDataAPIView(APIView):
 
-    permission_classes = [ToggleAPIPermission]
+    permission_classes = [
+        IsAuthenticated,
+        ToggleAPIPermission,
+        CashCountPermission,
+    ]
+
+    required_permission = "customers_export"
 
     def get(self, request, batch_id):
 
-        batch = get_object_or_404(
-            CustomerImportBatch,
-            id=batch_id
+        batch = get_company_batch_or_404(
+            request,
+            batch_id,
         )
 
         response = HttpResponse(
@@ -237,23 +350,30 @@ class CustomerImportOriginalDataAPIView(APIView):
             f'attachment; filename="customer_import_batch_{batch.id}.csv"'
         )
 
-        response.write(
-            "\ufeff"
-            "Row Number,Status,Customer Data,Errors\n"
-        )
-
-        import csv
-        import json
+        response.write("\ufeff")
 
         writer = csv.writer(response)
+
+        writer.writerow([
+            "Row Number",
+            "Status",
+            "Customer Data",
+            "Errors",
+        ])
 
         for row in batch.rows.all().order_by("row_number"):
 
             writer.writerow([
                 row.row_number,
                 row.status,
-                json.dumps(row.row_data, ensure_ascii=False),
-                json.dumps(row.errors, ensure_ascii=False),
+                json.dumps(
+                    row.row_data,
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    row.errors,
+                    ensure_ascii=False,
+                ),
             ])
 
         return response

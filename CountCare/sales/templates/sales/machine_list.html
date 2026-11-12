@@ -1,0 +1,282 @@
+
+{% extends "customers/base.html" %}
+
+{% block title %}Machine Register | CashCount{% endblock %}
+{% block page_title %}Machine Register{% endblock %}
+{% block page_subtitle %}Track every machine by serial number, warehouse and customer.{% endblock %}
+
+{% block content %}
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0">Receive Machine into Stock</h5>
+    </div>
+
+    <div class="card-body">
+        <form id="receiveForm">
+            <div class="row g-3">
+
+                <div class="col-md-4">
+                    <label class="form-label">Machine Product *</label>
+                    <select class="form-select" id="productId"
+                            name="product_id" required>
+                        <option value="">Select product</option>
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Warehouse *</label>
+                    <select class="form-select" id="locationId"
+                            name="location_id" required>
+                        <option value="">Select warehouse</option>
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Serial Number *</label>
+                    <input class="form-control" name="serial_number"
+                           maxlength="100" required>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Stock Entry Type *</label>
+                    <select class="form-select" name="movement_type" required>
+                        <option value="PURCHASE">Purchase</option>
+                        <option value="OPENING">Opening Stock</option>
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Purchase Reference</label>
+                    <input class="form-control" name="purchase_reference">
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Unit Cost (₹)</label>
+                    <input class="form-control" type="number"
+                           name="unit_cost" min="0" step="0.01"
+                           value="0">
+                </div>
+
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-box-arrow-in-down me-1"></i>
+                        Receive Machine
+                    </button>
+                </div>
+
+            </div>
+        </form>
+
+        <div id="receiveMessage" class="mt-3"></div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h5 class="mb-0">Machine Serial Register</h5>
+
+            <select id="statusFilter" class="form-select"
+                    style="max-width: 200px;">
+                <option value="">All Statuses</option>
+                <option value="IN_STOCK">In Stock</option>
+                <option value="RESERVED">Reserved</option>
+                <option value="SOLD">Sold</option>
+                <option value="UNDER_REPAIR">Under Repair</option>
+                <option value="REPLACED">Replaced</option>
+                <option value="RETIRED">Retired</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Serial Number</th>
+                        <th>Product</th>
+                        <th>Warehouse</th>
+                        <th>Customer</th>
+                        <th>Status</th>
+                        <th>Warranty End</th>
+                        <th>Warranty</th>
+                    </tr>
+                </thead>
+                <tbody id="machineTableBody">
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">
+                            Loading machines...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(function () {
+
+    const API = "/api/sales/";
+
+    function csrfToken() {
+        return $('meta[name="csrf-token"]').attr("content")
+            || document.cookie.split("; ")
+                .find(row => row.startsWith("csrftoken="))
+                ?.split("=")[1];
+    }
+
+    function escapeHtml(value) {
+        return $("<div>").text(value ?? "").html();
+    }
+
+    function results(response) {
+        return Array.isArray(response)
+            ? response
+            : (response.results || []);
+    }
+
+    function loadOptions() {
+
+        $.get(API + "products/", function (response) {
+            let html = '<option value="">Select product</option>';
+
+            results(response).forEach(item => {
+                html += `
+                    <option value="${item.id}">
+                        ${escapeHtml(item.name)} -
+                        ${escapeHtml(item.model_number)}
+                    </option>
+                `;
+            });
+
+            $("#productId").html(html);
+        });
+
+        $.get(API + "locations/", function (response) {
+            let html = '<option value="">Select warehouse</option>';
+
+            results(response).forEach(item => {
+                html += `
+                    <option value="${item.id}">
+                        ${escapeHtml(item.name)}
+                    </option>
+                `;
+            });
+
+            $("#locationId").html(html);
+        });
+    }
+
+    function loadMachines() {
+
+        const query = $("#statusFilter").val()
+            ? "?status=" + encodeURIComponent($("#statusFilter").val())
+            : "";
+
+        $.get(API + "machines/" + query, function (response) {
+
+            const machines = results(response);
+
+            if (!machines.length) {
+                $("#machineTableBody").html(`
+                    <tr><td colspan="7" class="text-center text-muted">
+                        No machines found.
+                    </td></tr>
+                `);
+                return;
+            }
+
+            let html = "";
+
+            machines.forEach(item => {
+
+                const statusClass = item.status === "IN_STOCK"
+                    ? "success"
+                    : (item.status === "SOLD" ? "primary" : "warning");
+
+                html += `
+                    <tr>
+                        <td class="fw-semibold">
+                            ${escapeHtml(item.serial_number)}
+                        </td>
+                        <td>${escapeHtml(item.product_name)}</td>
+                        <td>${escapeHtml(item.location_name || "-")}</td>
+                        <td>${escapeHtml(item.customer || "-")}</td>
+                        <td>
+                            <span class="badge bg-${statusClass}">
+                                ${escapeHtml(item.status)}
+                            </span>
+                        </td>
+                        <td>${escapeHtml(item.warranty_end_date || "-")}</td>
+                        <td>${item.is_under_warranty
+                            ? '<span class="badge bg-success">Under Warranty</span>'
+                            : '<span class="badge bg-secondary">Not Under Warranty</span>'}</td>
+                    </tr>
+                `;
+            });
+
+            $("#machineTableBody").html(html);
+
+        }).fail(function (xhr) {
+            console.error(xhr.responseText);
+            $("#machineTableBody").html(`
+                <tr><td colspan="7" class="text-center text-danger">
+                    Unable to load machine register.
+                </td></tr>
+            `);
+        });
+    }
+
+    $("#receiveForm").on("submit", function (e) {
+        e.preventDefault();
+
+        const data = Object.fromEntries(
+            new FormData(this).entries()
+        );
+
+        data.product_id = Number(data.product_id);
+        data.location_id = Number(data.location_id);
+        data.unit_cost = Number(data.unit_cost || 0).toFixed(2);
+
+        $.ajax({
+            url: API + "machines/receive/",
+            method: "POST",
+            contentType: "application/json",
+            data: JSON.stringify(data),
+            headers: {
+                "X-CSRFToken": csrfToken()
+            },
+            success: function () {
+                $("#receiveMessage").html(`
+                    <div class="alert alert-success">
+                        Machine received into stock successfully.
+                    </div>
+                `);
+
+                $("#receiveForm")[0].reset();
+                loadMachines();
+            },
+            error: function (xhr) {
+                console.error(xhr.responseJSON);
+                $("#receiveMessage").html(`
+                    <div class="alert alert-danger">
+                        ${escapeHtml(JSON.stringify(xhr.responseJSON || {}))}
+                    </div>
+                `);
+            }
+        });
+    });
+
+    $("#statusFilter").on("change", loadMachines);
+
+    loadOptions();
+    loadMachines();
+});
+</script>
+{% endblock %}

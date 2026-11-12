@@ -1,18 +1,26 @@
 
 import csv
+
 from datetime import date, datetime
 
 from django.db.models import Q
 from django.http import HttpResponse
-from django.utils import timezone
 
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
 
 from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
 
 from customers.models import Customer
 from customers.permissions import ToggleAPIPermission
 
+from accounts.permissions import CashCountPermission
+
+
+# --------------------------------------------------
+# Export Headers
+# --------------------------------------------------
 
 EXPORT_HEADERS = [
     "Customer Code",
@@ -39,6 +47,10 @@ EXPORT_HEADERS = [
 ]
 
 
+# --------------------------------------------------
+# Safe Export Value
+# --------------------------------------------------
+
 def safe_export_value(value):
     """
     Prevent spreadsheet formula injection and
@@ -62,13 +74,29 @@ def safe_export_value(value):
     return value
 
 
+# --------------------------------------------------
+# Get Company-Scoped Filtered Customers
+# --------------------------------------------------
+
 def get_filtered_customers(request):
 
-    queryset = Customer.objects.prefetch_related(
+    membership = getattr(
+        request,
+        "company_membership",
+        None,
+    )
+
+    if not membership:
+        return Customer.objects.none()
+
+    queryset = Customer.objects.filter(
+        company=membership.company
+    ).prefetch_related(
         "addresses"
-    ).all()
+    )
 
     # Customer type filter
+
     customer_type = request.query_params.get(
         "customer_type"
     )
@@ -79,6 +107,7 @@ def get_filtered_customers(request):
         )
 
     # Customer status filter
+
     customer_status = request.query_params.get(
         "status"
     )
@@ -89,7 +118,11 @@ def get_filtered_customers(request):
         )
 
     # Search filter
-    search = request.query_params.get("search", "").strip()
+
+    search = request.query_params.get(
+        "search",
+        ""
+    ).strip()
 
     if search:
 
@@ -110,12 +143,15 @@ def get_filtered_customers(request):
 
             for field in search_fields:
                 search_query |= Q(
-                    **{f"{field}__icontains": term}
+                    **{
+                        f"{field}__icontains": term
+                    }
                 )
 
             queryset = queryset.filter(search_query)
 
     # Ordering
+
     ordering = request.query_params.get(
         "ordering",
         "-created_at"
@@ -140,6 +176,10 @@ def get_filtered_customers(request):
     return queryset.distinct()
 
 
+# --------------------------------------------------
+# Prepare Customer Export Rows
+# --------------------------------------------------
+
 def customer_export_rows(customers):
 
     rows = []
@@ -149,6 +189,7 @@ def customer_export_rows(customers):
         addresses = list(customer.addresses.all())
 
         # Include one blank address row if no address exists.
+
         if not addresses:
             addresses = [None]
 
@@ -181,30 +222,42 @@ def customer_export_rows(customers):
             ])
 
     return [
-        [safe_export_value(value) for value in row]
+        [
+            safe_export_value(value)
+            for value in row
+        ]
         for row in rows
     ]
 
 
+# --------------------------------------------------
+# Customer Export API
+# GET /api/customers/export/?export_format=xlsx
+# --------------------------------------------------
+
 class CustomerExportAPIView(APIView):
 
-    authentication_classes = []
-    permission_classes = [ToggleAPIPermission]
+    # Do not disable authentication.
+    # Use the authentication classes configured in settings.py.
 
-    # Important: Do not let DRF interpret ?format=xlsx
-    # as a renderer format override.
-    # format_kwarg = None
+    permission_classes = [
+        IsAuthenticated,
+        ToggleAPIPermission,
+        CashCountPermission,
+    ]
+
+    # Staff must have this permission.
+    # OWNER has full access within their own company.
+
+    required_permission = "customers_export"
 
     def get(self, request, *args, **kwargs):
-
-        print("EXPORT GET METHOD EXECUTED")
 
         export_format = request.query_params.get(
             "export_format",
             "xlsx"
         ).lower()
 
-        print("Export format:", export_format)
         if export_format not in ["xlsx", "csv"]:
 
             return HttpResponse(
@@ -212,9 +265,16 @@ class CustomerExportAPIView(APIView):
                 status=400
             )
 
+        # Only customers belonging to the logged-in
+        # user's company will be exported.
+
         customers = get_filtered_customers(request)
 
         rows = customer_export_rows(customers)
+
+        # --------------------------------------------------
+        # CSV Export
+        # --------------------------------------------------
 
         if export_format == "csv":
 
@@ -227,19 +287,25 @@ class CustomerExportAPIView(APIView):
             )
 
             # BOM helps Excel recognize UTF-8 correctly.
+
             response.write("\ufeff")
 
             writer = csv.writer(response)
 
             writer.writerow(EXPORT_HEADERS)
+
             writer.writerows(rows)
-            print("response", response)
+
             return response
 
-        # Excel export
+        # --------------------------------------------------
+        # Excel Export
+        # --------------------------------------------------
+
         workbook = Workbook()
 
         worksheet = workbook.active
+
         worksheet.title = "Customers"
 
         worksheet.append(EXPORT_HEADERS)
@@ -248,7 +314,6 @@ class CustomerExportAPIView(APIView):
             worksheet.append(row)
 
         # Header formatting
-        from openpyxl.styles import Font, PatternFill, Alignment
 
         for cell in worksheet[1]:
 
@@ -267,6 +332,7 @@ class CustomerExportAPIView(APIView):
             )
 
         # Column widths
+
         for column in worksheet.columns:
 
             max_length = max(
@@ -279,6 +345,7 @@ class CustomerExportAPIView(APIView):
             ].width = min(max_length + 3, 40)
 
         worksheet.freeze_panes = "A2"
+
         worksheet.auto_filter.ref = worksheet.dimensions
 
         response = HttpResponse(
@@ -293,5 +360,5 @@ class CustomerExportAPIView(APIView):
         )
 
         workbook.save(response)
-        print("response excel", response)
+
         return response

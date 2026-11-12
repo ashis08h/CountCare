@@ -1,0 +1,168 @@
+
+{% extends "customers/base.html" %}
+
+{% block title %}Stock Movements | CashCount{% endblock %}
+{% block page_title %}Stock Movements{% endblock %}
+{% block page_subtitle %}Track every stock receipt, sale, return and transfer.{% endblock %}
+
+{% block content %}
+
+<div class="card border-0 shadow-sm">
+
+    <div class="card-header bg-white py-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h5 class="mb-0">Inventory Transaction History</h5>
+
+            <select id="movementFilter" class="form-select"
+                    style="max-width: 230px;">
+                <option value="">All Movements</option>
+                <option value="OPENING">Opening Stock</option>
+                <option value="PURCHASE">Purchase</option>
+                <option value="SALE">Sale</option>
+                <option value="CUSTOMER_RETURN">Customer Return</option>
+                <option value="SUPPLIER_RETURN">Supplier Return</option>
+                <option value="ADJUSTMENT_IN">Adjustment In</option>
+                <option value="ADJUSTMENT_OUT">Adjustment Out</option>
+                <option value="TRANSFER_IN">Transfer In</option>
+                <option value="TRANSFER_OUT">Transfer Out</option>
+                <option value="REPLACEMENT">Replacement</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="card-body">
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Product</th>
+                        <th>Warehouse</th>
+                        <th>Movement</th>
+                        <th>Quantity</th>
+                        <th>Unit Cost</th>
+                        <th>Reference</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+
+                <tbody id="movementTableBody">
+                    <tr>
+                        <td colspan="8" class="text-center text-muted">
+                            Loading stock movements...
+                        </td>
+                    </tr>
+                </tbody>
+
+            </table>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(function () {
+
+    const API = "/api/sales/movements/";
+
+    function escapeHtml(value) {
+        return $("<div>").text(value ?? "").html();
+    }
+
+    function loadMovements() {
+
+        const movementType = $("#movementFilter").val();
+
+        const query = movementType
+            ? "?movement_type=" + encodeURIComponent(movementType)
+            : "";
+
+        $.get(API + query, function (response) {
+
+            const movements = Array.isArray(response)
+                ? response
+                : (response.results || []);
+
+            if (!movements.length) {
+                $("#movementTableBody").html(`
+                    <tr>
+                        <td colspan="8" class="text-center text-muted">
+                            No stock movements found.
+                        </td>
+                    </tr>
+                `);
+                return;
+            }
+
+            let html = "";
+
+            movements.forEach(item => {
+
+                const inward = [
+                    "OPENING",
+                    "PURCHASE",
+                    "CUSTOMER_RETURN",
+                    "ADJUSTMENT_IN",
+                    "TRANSFER_IN"
+                ].includes(item.movement_type);
+
+                const quantityClass = inward
+                    ? "text-success"
+                    : "text-danger";
+
+                const sign = inward ? "+" : "-";
+
+                html += `
+                    <tr>
+                        <td>${escapeHtml(
+                            item.created_at
+                                ? new Date(item.created_at).toLocaleString()
+                                : "-"
+                        )}</td>
+
+                        <td class="fw-semibold">
+                            ${escapeHtml(item.product_name)}
+                        </td>
+
+                        <td>${escapeHtml(item.location_name)}</td>
+
+                        <td>${escapeHtml(item.movement_type)}</td>
+
+                        <td class="${quantityClass} fw-bold">
+                            ${sign}${item.quantity}
+                        </td>
+
+                        <td>₹${Number(item.unit_cost || 0).toFixed(2)}</td>
+
+                        <td>${escapeHtml(item.reference_number || "-")}</td>
+
+                        <td>${escapeHtml(item.notes || "-")}</td>
+                    </tr>
+                `;
+            });
+
+            $("#movementTableBody").html(html);
+
+        }).fail(function (xhr) {
+            console.error(xhr.responseText);
+            $("#movementTableBody").html(`
+                <tr>
+                    <td colspan="8" class="text-center text-danger">
+                        Unable to load stock movements.
+                    </td>
+                </tr>
+            `);
+        });
+    }
+
+    $("#movementFilter").on("change", loadMovements);
+
+    loadMovements();
+});
+</script>
+{% endblock %}

@@ -40,7 +40,8 @@ INSTALLED_APPS = [
     'customers',
     'rest_framework',
     'django_filters',
-    'accounts'
+    'accounts',
+    'sales'
 ]
 
 MIDDLEWARE = [
@@ -62,9 +63,11 @@ TEMPLATES = [
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
+                'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.csrf',
             ],
         },
     },
@@ -131,10 +134,14 @@ MAILERS = {
 }
 
 # API Security Configuration
-API_SECURITY_ENABLED = False  # Set True to enable authentication
+API_SECURITY_ENABLED = False
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        # Browser-based Django session authentication
+        "rest_framework.authentication.SessionAuthentication",
+
+        # JWT authentication for external API clients
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
 
@@ -142,8 +149,9 @@ REST_FRAMEWORK = {
         "customers.permissions.ToggleAPIPermission",
     ],
 
-    "DEFAULT_PAGINATION_CLASS":
-        "rest_framework.pagination.PageNumberPagination",
+    "DEFAULT_PAGINATION_CLASS": (
+        "rest_framework.pagination.PageNumberPagination"
+    ),
 
     "PAGE_SIZE": 20,
 
@@ -153,6 +161,7 @@ REST_FRAMEWORK = {
         "rest_framework.filters.OrderingFilter",
     ],
 }
+
 
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/api/dashboard/"
