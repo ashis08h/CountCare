@@ -114,6 +114,17 @@
                 <i class="bi bi-cart-plus"></i>
                 <span>Create Sale</span>
             </a>
+            <a href="{% url 'sales-visits-page' %}"
+               class="nav-link {% if request.resolver_match.url_name == 'sales-visits-page' %}active{% endif %}">
+                <i class="bi bi-list-ul"></i>
+                <span>Sales Visits</span>
+            </a>
+
+            <a href="{% url 'sales-create-page' %}"
+               class="nav-link {% if request.resolver_match.url_name == 'sales-create-page' %}active{% endif %}">
+                <i class="bi bi-cart-plus"></i>
+                <span>Create Sale</span>
+            </a>
 
         </nav>
 

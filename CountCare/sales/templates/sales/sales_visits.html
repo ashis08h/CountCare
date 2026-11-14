@@ -1,0 +1,711 @@
+
+{% extends "customers/base.html" %}
+
+{% block title %}Sales Visits | CashCount{% endblock %}
+
+{% block page_title %}Sales Visits{% endblock %}
+{% block page_subtitle %}View and manage customer sales visits{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid">
+
+    <!-- Page heading -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+        <div>
+            <h4 class="mb-1">Sales Visits</h4>
+            <p class="text-muted mb-0">
+                Track drafts, ongoing visits and completed sales.
+            </p>
+        </div>
+
+        <a href="{% url 'sales-create-page' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-1"></i>
+            Create Sale
+        </a>
+    </div>
+
+    <div id="visitsMessage"></div>
+
+    <!-- Summary cards -->
+    <div class="row g-3 mb-4">
+
+        <div class="col-6 col-xl">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Total Visits</div>
+                    <h3 class="mb-0 mt-2" id="totalVisits">0</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-xl">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Draft</div>
+                    <h3 class="mb-0 mt-2 text-secondary" id="draftVisits">0</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-xl">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">In Progress</div>
+                    <h3 class="mb-0 mt-2 text-primary" id="progressVisits">0</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-xl">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Completed</div>
+                    <h3 class="mb-0 mt-2 text-success" id="completedVisits">0</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-6 col-xl">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Cancelled</div>
+                    <h3 class="mb-0 mt-2 text-danger" id="cancelledVisits">0</h3>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Filters -->
+    <div class="card border-0 shadow-sm mb-4">
+
+        <div class="card-header bg-white py-3">
+            <h6 class="mb-0">Search and Filters</h6>
+        </div>
+
+        <div class="card-body">
+
+            <div class="row g-3">
+
+                <div class="col-lg-4 col-md-6">
+                    <label class="form-label">Search</label>
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="searchVisits"
+                        placeholder="Visit number, customer, mobile..."
+                    >
+                </div>
+
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" id="filterStatus">
+                        <option value="">All Statuses</option>
+                        <option value="DRAFT">Draft</option>
+                        <option value="IN_PROGRESS">In Progress</option>
+                        <option value="COMPLETED">Completed</option>
+                        <option value="CANCELLED">Cancelled</option>
+                    </select>
+                </div>
+
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label">Salesman</label>
+                    <select class="form-select" id="filterSalesman">
+                        <option value="">All Salesmen</option>
+                    </select>
+                </div>
+
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label">Warehouse</label>
+                    <select class="form-select" id="filterLocation">
+                        <option value="">All Warehouses</option>
+                    </select>
+                </div>
+
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label">Visit Type</label>
+                    <select class="form-select" id="filterVisitType">
+                        <option value="">All Types</option>
+                        <option value="NEW_SALE">New Sale</option>
+                        <option value="MAINTENANCE">Maintenance</option>
+                        <option value="REPLACEMENT">Replacement</option>
+                    </select>
+                </div>
+
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label">Date From</label>
+                    <input type="date" class="form-control" id="dateFrom">
+                </div>
+
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label">Date To</label>
+                    <input type="date" class="form-control" id="dateTo">
+                </div>
+
+                <div class="col-lg-6 d-flex align-items-end gap-2">
+                    <button class="btn btn-primary" id="applyFilters">
+                        <i class="bi bi-search me-1"></i>
+                        Apply Filters
+                    </button>
+
+                    <button class="btn btn-outline-secondary" id="resetFilters">
+                        Reset
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Visits table -->
+    <div class="card border-0 shadow-sm">
+
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Visit Records</h6>
+            <span class="text-muted small" id="recordCount">Loading...</span>
+        </div>
+
+        <div class="table-responsive">
+
+            <table class="table table-hover align-middle mb-0">
+
+                <thead class="table-light">
+                    <tr>
+                        <th>Visit Number</th>
+                        <th>Visit Date</th>
+                        <th>Customer</th>
+                        <th>Contact</th>
+                        <th>Salesman</th>
+                        <th>Warehouse</th>
+                        <th class="text-center">Items</th>
+                        <th class="text-end">Total Amount</th>
+                        <th>Status</th>
+                        <th class="text-center">Action</th>
+                    </tr>
+                </thead>
+
+                <tbody id="visitsTableBody">
+                    <tr>
+                        <td colspan="10" class="text-center py-5">
+                            Loading sales visits...
+                        </td>
+                    </tr>
+                </tbody>
+
+            </table>
+
+        </div>
+
+        <!-- Pagination -->
+        <div class="card-footer bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+
+            <span class="small text-muted" id="paginationInfo">
+                Showing records
+            </span>
+
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" id="previousPage" disabled>
+                    Previous
+                </button>
+
+                <button class="btn btn-sm btn-outline-secondary" id="nextPage" disabled>
+                    Next
+                </button>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- Visit Details Modal -->
+<div class="modal fade" id="visitDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title">Sales Visit Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body" id="visitDetailsContent">
+                <!-- Details are populated using JavaScript -->
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Close
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+
+<script>
+$(document).ready(function () {
+
+    const VISITS_API = "/api/sales/visits/";
+    const EMPLOYEE_API = "/api/sales/sales-employees/";
+    const LOCATION_API = "/api/sales/locations/";
+    const PAGE_SIZE = 20;
+
+    let currentPage = 1;
+    let totalPages = 1;
+    let visitsData = [];
+
+    let currentRequestUrl = null;
+
+    function escapeHtml(value) {
+        return $("<div>").text(value ?? "").html();
+    }
+
+    function formatDate(value) {
+        if (!value) return "-";
+
+        const parts = value.split("-");
+        if (parts.length !== 3) return value;
+
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+
+    function formatCurrency(value) {
+        return new Intl.NumberFormat("en-IN", {
+            style: "currency",
+            currency: "INR"
+        }).format(Number(value || 0));
+    }
+
+    function showMessage(message, type = "danger") {
+        $("#visitsMessage").html(`
+            <div class="alert alert-${type} alert-dismissible fade show">
+                ${escapeHtml(message)}
+                <button type="button" class="btn-close"
+                    data-bs-dismiss="alert"></button>
+            </div>
+        `);
+    }
+
+    function statusBadge(status, display) {
+
+        const classes = {
+            DRAFT: "bg-secondary",
+            IN_PROGRESS: "bg-primary",
+            COMPLETED: "bg-success",
+            CANCELLED: "bg-danger"
+        };
+
+        return `
+            <span class="badge ${classes[status] || "bg-secondary"}">
+                ${escapeHtml(display || status)}
+            </span>
+        `;
+    }
+
+    function loadEmployees() {
+
+        $.get(EMPLOYEE_API)
+            .done(function (response) {
+
+                const employees = Array.isArray(response)
+                    ? response
+                    : (response.results || []);
+
+                employees.forEach(function (employee) {
+
+                    $("#filterSalesman").append(
+                        $("<option>", {
+                            value: employee.id,
+                            text: employee.employee_name
+                        })
+                    );
+                });
+            });
+    }
+
+    function loadLocations() {
+
+        $.get(LOCATION_API)
+            .done(function (response) {
+
+                const locations = Array.isArray(response)
+                    ? response
+                    : (response.results || []);
+
+                locations.forEach(function (location) {
+
+                    if (!location.is_active) return;
+
+                    $("#filterLocation").append(
+                        $("<option>", {
+                            value: location.id,
+                            text: location.name
+                        })
+                    );
+                });
+            });
+    }
+
+    function loadSummary(summary) {
+
+        $("#totalVisits").text(summary.total || 0);
+        $("#draftVisits").text(summary.draft || 0);
+        $("#progressVisits").text(summary.in_progress || 0);
+        $("#completedVisits").text(summary.completed || 0);
+        $("#cancelledVisits").text(summary.cancelled || 0);
+    }
+
+    function buildFilterUrl() {
+
+        const params = new URLSearchParams();
+
+        const search = $("#searchVisits").val().trim();
+        const status = $("#filterStatus").val();
+        const salesman = $("#filterSalesman").val();
+        const location = $("#filterLocation").val();
+        const visitType = $("#filterVisitType").val();
+        const dateFrom = $("#dateFrom").val();
+        const dateTo = $("#dateTo").val();
+
+        if (search) params.set("search", search);
+        if (status) params.set("status", status);
+        if (salesman) params.set("salesman_id", salesman);
+        if (location) params.set("location_id", location);
+        if (visitType) params.set("visit_type", visitType);
+        if (dateFrom) params.set("date_from", dateFrom);
+        if (dateTo) params.set("date_to", dateTo);
+
+        params.set("page", currentPage);
+
+        return VISITS_API + "?" + params.toString();
+    }
+
+    function renderVisits(visits) {
+
+        const tbody = $("#visitsTableBody");
+
+        tbody.empty();
+
+        visitsData = visits;
+
+        if (!visits.length) {
+
+            tbody.html(`
+                <tr>
+                    <td colspan="10" class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+                        No sales visits found.
+                    </td>
+                </tr>
+            `);
+
+            return;
+        }
+
+        visits.forEach(function (visit) {
+
+            const row = `
+                <tr>
+                    <td>
+                        <strong>${escapeHtml(visit.visit_number)}</strong>
+                    </td>
+
+                    <td>${formatDate(visit.visit_date)}</td>
+
+                    <td>
+                        <div class="fw-semibold">
+                            ${escapeHtml(visit.customer_name)}
+                        </div>
+                        <small class="text-muted">
+                            ${escapeHtml(visit.customer_code)}
+                        </small>
+                    </td>
+
+                    <td>${escapeHtml(visit.customer_mobile || "-")}</td>
+
+                    <td>${escapeHtml(visit.salesman_name || "-")}</td>
+
+                    <td>${escapeHtml(visit.warehouse_name || "-")}</td>
+
+                    <td class="text-center">
+                        ${Number(visit.item_count || 0)}
+                    </td>
+
+                    <td class="text-end">
+                        ${formatCurrency(visit.total_amount)}
+                    </td>
+
+                    <td>
+                        ${statusBadge(visit.status, visit.status_display)}
+                    </td>
+
+                    <td class="text-center">
+                        <a
+                            href="/api/sales/sales-visits/${visit.id}/"
+                            class="btn btn-sm btn-outline-primary"
+                        >
+                            <i class="bi bi-eye"></i>
+                            View
+                        </a>
+                    </td>
+                </tr>
+            `;
+
+            tbody.append(row);
+        });
+    }
+
+    function loadVisits(url = null) {
+
+        const requestUrl = url || buildFilterUrl();
+
+        currentRequestUrl = requestUrl;
+
+        $("#visitsTableBody").html(`
+            <tr>
+                <td colspan="10" class="text-center py-5">
+                    Loading sales visits...
+                </td>
+            </tr>
+        `);
+
+        $("#recordCount").text("Loading...");
+
+        $.ajax({
+            url: requestUrl,
+            type: "GET",
+
+            success: function (response) {
+
+                const visits = Array.isArray(response)
+                    ? response
+                    : (response.results || []);
+
+                renderVisits(visits);
+
+                if (response.summary) {
+                    loadSummary(response.summary);
+                }
+
+                const totalRecords = response.count ?? visits.length;
+
+                $("#recordCount").text(
+                    totalRecords + " records"
+                );
+
+                const pageSize = PAGE_SIZE;
+
+                totalPages = Math.max(
+                    1,
+                    Math.ceil(totalRecords / pageSize)
+                );
+
+                // Use API pagination links when available.
+                $("#previousPage").prop(
+                    "disabled",
+                    !response.previous
+                );
+
+                $("#nextPage").prop(
+                    "disabled",
+                    !response.next
+                );
+
+                $("#paginationInfo").text(
+                    "Showing " +
+                    (totalRecords ? ((currentPage - 1) * pageSize + 1) : 0) +
+                    " to " +
+                    Math.min(currentPage * pageSize, totalRecords) +
+                    " of " + totalRecords
+                );
+
+                $("#previousPage").data(
+                    "url",
+                    response.previous || null
+                );
+
+                $("#nextPage").data(
+                    "url",
+                    response.next || null
+                );
+            },
+
+            error: function (xhr) {
+
+                $("#visitsTableBody").html(`
+                    <tr>
+                        <td colspan="10" class="text-center text-danger py-5">
+                            Unable to load sales visits.
+                        </td>
+                    </tr>
+                `);
+
+                showMessage(
+                    xhr.responseJSON?.detail ||
+                    "Unable to load sales visits."
+                );
+            }
+        });
+    }
+
+    function showVisitDetails(visit) {
+
+        const html = `
+            <div class="row g-3">
+
+                <div class="col-md-6">
+                    <small class="text-muted">Visit Number</small>
+                    <div class="fw-semibold">${escapeHtml(visit.visit_number)}</div>
+                </div>
+
+                <div class="col-md-6">
+                    <small class="text-muted">Status</small>
+                    <div>${statusBadge(visit.status, visit.status_display)}</div>
+                </div>
+
+                <div class="col-md-6">
+                    <small class="text-muted">Customer</small>
+                    <div class="fw-semibold">${escapeHtml(visit.customer_name)}</div>
+                    <div>${escapeHtml(visit.customer_code)}</div>
+                </div>
+
+                <div class="col-md-6">
+                    <small class="text-muted">Contact Number</small>
+                    <div>${escapeHtml(visit.customer_mobile || "-")}</div>
+                </div>
+
+                <div class="col-md-6">
+                    <small class="text-muted">Salesman</small>
+                    <div>${escapeHtml(visit.salesman_name || "-")}</div>
+                </div>
+
+                <div class="col-md-6">
+                    <small class="text-muted">Warehouse</small>
+                    <div>${escapeHtml(visit.warehouse_name || "-")}</div>
+                </div>
+
+                <div class="col-md-6">
+                    <small class="text-muted">Visit Date</small>
+                    <div>${formatDate(visit.visit_date)}</div>
+                </div>
+
+                <div class="col-md-6">
+                    <small class="text-muted">Visit Time</small>
+                    <div>${escapeHtml(visit.visit_time || "-")}</div>
+                </div>
+
+                <div class="col-md-12">
+                    <small class="text-muted">Billing Address Snapshot</small>
+                    <div>${escapeHtml(visit.location_address || "-")}</div>
+                </div>
+
+                <div class="col-md-12">
+                    <small class="text-muted">Purpose</small>
+                    <div>${escapeHtml(visit.purpose || "-")}</div>
+                </div>
+
+                <div class="col-md-12">
+                    <small class="text-muted">Products Added</small>
+                    <div>${Number(visit.item_count || 0)}</div>
+                </div>
+
+                <div class="col-md-12">
+                    <small class="text-muted">Total Amount</small>
+                    <div class="fw-bold fs-5">
+                        ${formatCurrency(visit.total_amount)}
+                    </div>
+                </div>
+
+            </div>
+        `;
+
+        $("#visitDetailsContent").html(html);
+
+        bootstrap.Modal
+            .getOrCreateInstance(
+                document.getElementById("visitDetailsModal")
+            )
+            .show();
+    }
+
+    // Apply filters
+    $("#applyFilters").on("click", function () {
+        currentPage = 1;
+        loadVisits();
+    });
+
+    // Search on Enter
+    $("#searchVisits").on("keydown", function (event) {
+        if (event.key === "Enter") {
+            currentPage = 1;
+            loadVisits();
+        }
+    });
+
+    // Reset filters
+    $("#resetFilters").on("click", function () {
+
+        $("#searchVisits").val("");
+        $("#filterStatus").val("");
+        $("#filterSalesman").val("");
+        $("#filterLocation").val("");
+        $("#filterVisitType").val("");
+        $("#dateFrom").val("");
+        $("#dateTo").val("");
+
+        currentPage = 1;
+
+        loadVisits();
+    });
+
+    // View visit details
+    $(document).on("click", ".view-visit", function () {
+
+        const visitId = $(this).data("id");
+
+        const visit = visitsData.find(
+            item => String(item.id) === String(visitId)
+        );
+
+        if (visit) {
+            showVisitDetails(visit);
+        }
+    });
+
+    // Pagination
+    $("#previousPage").on("click", function () {
+
+        const url = $(this).data("url");
+
+        if (url) {
+            currentPage = Math.max(1, currentPage - 1);
+            loadVisits(url);
+        }
+    });
+
+    $("#nextPage").on("click", function () {
+
+        const url = $(this).data("url");
+
+        if (url) {
+            currentPage += 1;
+            loadVisits(url);
+        }
+    });
+
+    // Initial load
+    loadEmployees();
+    loadLocations();
+    loadVisits();
+
+});
+</script>
+
+{% endblock %}

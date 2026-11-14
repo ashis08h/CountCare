@@ -56,6 +56,8 @@ from sales.serializers import (
     SaleCustomerLookupSerializer,
     SalesEmployeeSerializer,
     CreateSalesVisitSerializer,
+    SalesVisitListSerializer,
+    SalesVisitDetailSerializer
 )
 
 from sales.services.inventory_service import (
@@ -69,6 +71,8 @@ from rest_framework.generics import RetrieveUpdateAPIView
 
 from customers.models import Customer
 from sales.models import CustomerVisit
+from django.db.models import Q
+from django.utils.dateparse import parse_date
 
 # =========================================================
 # INVENTORY API PERMISSION MIXIN
@@ -708,8 +712,229 @@ class CreateSalesVisitAPIView(
                 "customer_id": visit.customer_id,
                 "salesman_id": visit.salesman_id,
                 "stock_location_id": visit.stock_location_id,
-                "billing_address": visit.billing_address_snapshot,
+                "billing_address": visit.location_address,
                 "visit_date": visit.visit_date,
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+@login_required
+@ensure_csrf_cookie
+@inventory_company_required
+def sales_visits_page(request):
+    return render(
+        request,
+        "sales/sales_visits.html",
+    )
+
+
+
+# =========================================================
+# SALES VISITS LIST API
+# =========================================================
+
+class SalesVisitListAPIView(
+    InventoryPermissionMixin,
+    ListAPIView,
+):
+
+    serializer_class = SalesVisitListSerializer
+
+    permission_map = {
+        "GET": "sales_view",
+    }
+
+    def get_company_queryset(self):
+        return (
+            CustomerVisit.objects
+            .filter(company=self.get_company())
+            .select_related(
+                "customer",
+                "salesman__user",
+                "stock_location",
+            )
+            .prefetch_related("sale_items")
+            .order_by("-visit_date", "-created_at")
+        )
+
+    def get_queryset(self):
+
+        queryset = self.get_company_queryset()
+
+        # Status filter
+        status_filter = self.request.query_params.get("status")
+
+        if status_filter:
+            valid_statuses = [
+                choice[0]
+                for choice in CustomerVisit.VisitStatus.choices
+            ]
+
+            if status_filter not in valid_statuses:
+                raise ValidationError({
+                    "status": "Invalid visit status."
+                })
+
+            queryset = queryset.filter(status=status_filter)
+
+        # Visit type filter
+        visit_type = self.request.query_params.get("visit_type")
+
+        if visit_type:
+            valid_types = [
+                choice[0]
+                for choice in CustomerVisit.VisitType.choices
+            ]
+
+            if visit_type not in valid_types:
+                raise ValidationError({
+                    "visit_type": "Invalid visit type."
+                })
+
+            queryset = queryset.filter(visit_type=visit_type)
+
+        # Salesman filter
+        salesman_id = self.request.query_params.get("salesman_id")
+
+        if salesman_id:
+            if not salesman_id.isdigit():
+                raise ValidationError({
+                    "salesman_id": "Invalid salesman ID."
+                })
+
+            queryset = queryset.filter(
+                salesman_id=int(salesman_id)
+            )
+
+        # Warehouse filter
+        location_id = self.request.query_params.get("location_id")
+
+        if location_id:
+            if not location_id.isdigit():
+                raise ValidationError({
+                    "location_id": "Invalid warehouse ID."
+                })
+
+            queryset = queryset.filter(
+                stock_location_id=int(location_id)
+            )
+
+        # Date range filters
+        date_from = self.request.query_params.get("date_from")
+        date_to = self.request.query_params.get("date_to")
+
+        if date_from:
+            parsed_from = parse_date(date_from)
+
+            if not parsed_from:
+                raise ValidationError({
+                    "date_from": "Use YYYY-MM-DD format."
+                })
+
+            queryset = queryset.filter(
+                visit_date__gte=parsed_from
+            )
+
+        if date_to:
+            parsed_to = parse_date(date_to)
+
+            if not parsed_to:
+                raise ValidationError({
+                    "date_to": "Use YYYY-MM-DD format."
+                })
+
+            queryset = queryset.filter(
+                visit_date__lte=parsed_to
+            )
+
+        if date_from and date_to and parsed_from > parsed_to:
+            raise ValidationError({
+                "date_to": "End date cannot be before start date."
+            })
+
+        # Search by visit number, customer, mobile or code
+        search = self.request.query_params.get("search", "").strip()
+
+        if search:
+            queryset = queryset.filter(
+                Q(visit_number__icontains=search)
+                | Q(customer__business_name__icontains=search)
+                | Q(customer__contact_person__icontains=search)
+                | Q(customer__customer_code__icontains=search)
+                | Q(customer_contact_number__icontains=search)
+            )
+
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+
+        response = super().list(request, *args, **kwargs)
+
+        # Summary cards are based on all visits belonging
+        # to the company, not just the currently filtered page.
+        company_visits = self.get_company_queryset()
+
+        response.data["summary"] = {
+            "total": company_visits.count(),
+            "draft": company_visits.filter(
+                status=CustomerVisit.VisitStatus.DRAFT
+            ).count(),
+            "in_progress": company_visits.filter(
+                status=CustomerVisit.VisitStatus.IN_PROGRESS
+            ).count(),
+            "completed": company_visits.filter(
+                status=CustomerVisit.VisitStatus.COMPLETED
+            ).count(),
+            "cancelled": company_visits.filter(
+                status=CustomerVisit.VisitStatus.CANCELLED
+            ).count(),
+        }
+
+        return response
+
+
+
+# =========================================================
+# SALES VISIT DETAIL API
+# =========================================================
+
+class SalesVisitDetailAPIView(
+    InventoryPermissionMixin,
+    APIView,
+):
+
+    permission_map = {
+        "GET": "sales_view",
+    }
+
+    def get(self, request, pk):
+
+        visit = get_object_or_404(
+            CustomerVisit.objects
+            .filter(company=self.get_company())
+            .select_related(
+                "customer",
+                "salesman__user",
+                "stock_location",
+            )
+            .prefetch_related(
+                "sale_items__product",
+            ),
+            pk=pk,
+        )
+
+        serializer = SalesVisitDetailSerializer(visit)
+
+        return Response(serializer.data)
+
+
+@login_required
+@ensure_csrf_cookie
+@inventory_company_required
+def sales_visit_detail_page(request, pk):
+    return render(
+        request,
+        "sales/sales_visit_detail.html",
+        {"visit_id": pk},
+    )

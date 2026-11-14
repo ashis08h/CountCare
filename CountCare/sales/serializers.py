@@ -14,6 +14,7 @@ from sales.models import (
 from customers.models import Customer, CustomerAddress
 from accounts.models import CompanyEmployee
 from sales.models import CustomerVisit
+from sales.models import VisitSaleItem
 
 
 class StockLocationSerializer(serializers.ModelSerializer):
@@ -449,8 +450,7 @@ class CreateSalesVisitSerializer(serializers.Serializer):
             customer=customer,
             salesman=validated_data["salesman"],
             stock_location=validated_data["stock_location"],
-            billing_address=billing_address,
-            billing_address_snapshot=address_snapshot,
+            location_address=address_snapshot,
             customer_contact_person=customer.contact_person,
             customer_contact_number=customer.mobile_number,
             visit_type="NEW_SALE",
@@ -460,5 +460,225 @@ class CreateSalesVisitSerializer(serializers.Serializer):
             purpose=validated_data.get("purpose", ""),
             visit_notes=validated_data.get("visit_notes", ""),
             created_by=user,
+        )
+
+
+
+class SalesVisitListSerializer(serializers.ModelSerializer):
+
+    customer_name = serializers.SerializerMethodField()
+    customer_code = serializers.CharField(
+        source="customer.customer_code",
+        read_only=True,
+    )
+    customer_mobile = serializers.CharField(
+        source="customer_contact_number",
+        read_only=True,
+    )
+    salesman_name = serializers.SerializerMethodField()
+    warehouse_name = serializers.CharField(
+        source="stock_location.name",
+        read_only=True,
+        default="",
+    )
+    status_display = serializers.CharField(
+        source="get_status_display",
+        read_only=True,
+    )
+    visit_type_display = serializers.CharField(
+        source="get_visit_type_display",
+        read_only=True,
+    )
+    item_count = serializers.SerializerMethodField()
+    total_amount = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomerVisit
+        fields = [
+            "id",
+            "visit_number",
+            "customer_id",
+            "customer_name",
+            "customer_code",
+            "customer_mobile",
+            "salesman_id",
+            "salesman_name",
+            "stock_location_id",
+            "warehouse_name",
+            "visit_type",
+            "visit_type_display",
+            "visit_date",
+            "visit_time",
+            "status",
+            "status_display",
+            "purpose",
+            "location_address",
+            "item_count",
+            "total_amount",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_customer_name(self, obj):
+        return (
+            obj.customer.business_name
+            or obj.customer.contact_person
+            or obj.customer.customer_code
+        )
+
+    def get_salesman_name(self, obj):
+        user = obj.salesman.user
+        return user.get_full_name() or user.username
+
+    def get_item_count(self, obj):
+        return obj.sale_items.count()
+
+    def get_total_amount(self, obj):
+        from decimal import Decimal
+
+        total = sum(
+            (
+                item.total_amount
+                for item in obj.sale_items.all()
+            ),
+            Decimal("0.00"),
+        )
+
+        return total
+
+
+
+class SalesVisitItemDetailSerializer(serializers.ModelSerializer):
+
+    product_name = serializers.CharField(
+        source="product.name",
+        read_only=True,
+    )
+    product_sku = serializers.CharField(
+        source="product.sku",
+        read_only=True,
+    )
+    gross_amount = serializers.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        read_only=True,
+    )
+    taxable_amount = serializers.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        read_only=True,
+    )
+    gst_amount = serializers.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        read_only=True,
+    )
+    total_amount = serializers.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        read_only=True,
+    )
+
+    class Meta:
+        model = VisitSaleItem
+        fields = [
+            "id",
+            "product",
+            "product_name",
+            "product_sku",
+            "quantity",
+            "unit_price",
+            "discount_amount",
+            "gst_rate",
+            "gross_amount",
+            "taxable_amount",
+            "gst_amount",
+            "total_amount",
+        ]
+
+
+class SalesVisitDetailSerializer(serializers.ModelSerializer):
+
+    customer_name = serializers.SerializerMethodField()
+    customer_code = serializers.CharField(
+        source="customer.customer_code",
+        read_only=True,
+    )
+    salesman_name = serializers.SerializerMethodField()
+    warehouse_name = serializers.CharField(
+        source="stock_location.name",
+        read_only=True,
+        default="",
+    )
+    status_display = serializers.CharField(
+        source="get_status_display",
+        read_only=True,
+    )
+    visit_type_display = serializers.CharField(
+        source="get_visit_type_display",
+        read_only=True,
+    )
+
+    sale_items = SalesVisitItemDetailSerializer(
+        many=True,
+        read_only=True,
+    )
+
+    total_amount = serializers.SerializerMethodField()
+    total_items = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomerVisit
+        fields = [
+            "id",
+            "visit_number",
+            "customer",
+            "customer_name",
+            "customer_code",
+            "salesman",
+            "salesman_name",
+            "stock_location",
+            "warehouse_name",
+            "visit_type",
+            "visit_type_display",
+            "visit_date",
+            "visit_time",
+            "status",
+            "status_display",
+            "purpose",
+            "visit_notes",
+            "location_address",
+            "customer_contact_person",
+            "customer_contact_number",
+            "sale_items",
+            "total_items",
+            "total_amount",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_customer_name(self, obj):
+        return (
+            obj.customer.business_name
+            or obj.customer.contact_person
+            or obj.customer.customer_code
+        )
+
+    def get_salesman_name(self, obj):
+        user = obj.salesman.user
+        return user.get_full_name() or user.username
+
+    def get_total_items(self, obj):
+        return sum(item.quantity for item in obj.sale_items.all())
+
+    def get_total_amount(self, obj):
+        from decimal import Decimal
+
+        return sum(
+            (
+                item.total_amount
+                for item in obj.sale_items.all()
+            ),
+            Decimal("0.00"),
         )
 

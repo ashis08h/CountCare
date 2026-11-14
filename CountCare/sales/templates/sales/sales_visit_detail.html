@@ -1,0 +1,243 @@
+
+{% extends "customers/base.html" %}
+
+{% block title %}Sales Visit Details | CashCount{% endblock %}
+
+{% block page_title %}Sales Visit Details{% endblock %}
+{% block page_subtitle %}Review customer visit and sale information{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid">
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+        <div>
+            <h4 id="visitNumber">Loading visit...</h4>
+            <div id="visitStatus"></div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <a href="{% url 'sales-visits-page' %}"
+               class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Visits
+            </a>
+        </div>
+    </div>
+
+    <div id="detailMessage"></div>
+
+    <!-- Customer and visit details -->
+    <div class="row g-3 mb-4">
+
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <h6 class="mb-0">Customer Information</h6>
+                </div>
+                <div class="card-body" id="customerDetails">
+                    Loading...
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <h6 class="mb-0">Visit Information</h6>
+                </div>
+                <div class="card-body" id="visitDetails">
+                    Loading...
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Products -->
+    <div class="card border-0 shadow-sm mb-4">
+
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Products in Sale</h6>
+            <span class="badge bg-secondary" id="itemCount">0 Items</span>
+        </div>
+
+        <div class="table-responsive">
+
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Product</th>
+                        <th>SKU</th>
+                        <th class="text-center">Quantity</th>
+                        <th class="text-end">Unit Price</th>
+                        <th class="text-end">Discount</th>
+                        <th class="text-end">GST</th>
+                        <th class="text-end">Total</th>
+                    </tr>
+                </thead>
+
+                <tbody id="saleItemsBody">
+                    <tr>
+                        <td colspan="7" class="text-center py-4">
+                            Loading products...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+        </div>
+    </div>
+
+    <!-- Totals -->
+    <div class="row justify-content-end mb-4">
+        <div class="col-md-5 col-lg-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Items</span>
+                        <strong id="totalItems">0</strong>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Grand Total</span>
+                        <h5 class="mb-0" id="grandTotal">₹0.00</h5>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+
+<script>
+$(document).ready(function () {
+
+    const VISIT_ID = "{{ visit_id }}";
+    const DETAIL_API = `/api/sales/visits/${VISIT_ID}/`;
+
+    function escapeHtml(value) {
+        return $("<div>").text(value ?? "").html();
+    }
+
+    function money(value) {
+        return new Intl.NumberFormat("en-IN", {
+            style: "currency",
+            currency: "INR"
+        }).format(Number(value || 0));
+    }
+
+    function formatDate(value) {
+        if (!value) return "-";
+
+        const parts = value.split("-");
+        return parts.length === 3
+            ? `${parts[2]}-${parts[1]}-${parts[0]}`
+            : value;
+    }
+
+    function showError(message) {
+        $("#detailMessage").html(`
+            <div class="alert alert-danger">
+                ${escapeHtml(message)}
+            </div>
+        `);
+    }
+
+    function renderVisit(visit) {
+
+        $("#visitNumber").text(visit.visit_number);
+
+        const statusClasses = {
+            DRAFT: "bg-secondary",
+            IN_PROGRESS: "bg-primary",
+            COMPLETED: "bg-success",
+            CANCELLED: "bg-danger"
+        };
+
+        $("#visitStatus").html(`
+            <span class="badge ${statusClasses[visit.status] || "bg-secondary"}">
+                ${escapeHtml(visit.status_display)}
+            </span>
+        `);
+
+        $("#customerDetails").html(`
+            <p><strong>Customer:</strong> ${escapeHtml(visit.customer_name)}</p>
+            <p><strong>Customer Code:</strong> ${escapeHtml(visit.customer_code)}</p>
+            <p><strong>Contact Person:</strong> ${escapeHtml(visit.customer_contact_person || "-")}</p>
+            <p><strong>Mobile:</strong> ${escapeHtml(visit.customer_contact_number || "-")}</p>
+            <p><strong>Billing Address:</strong> ${escapeHtml(visit.location_address || "-")}</p>
+        `);
+
+        $("#visitDetails").html(`
+            <p><strong>Visit Type:</strong> ${escapeHtml(visit.visit_type_display)}</p>
+            <p><strong>Visit Date:</strong> ${formatDate(visit.visit_date)}</p>
+            <p><strong>Visit Time:</strong> ${escapeHtml(visit.visit_time || "-")}</p>
+            <p><strong>Salesman:</strong> ${escapeHtml(visit.salesman_name)}</p>
+            <p><strong>Warehouse:</strong> ${escapeHtml(visit.warehouse_name || "-")}</p>
+            <p><strong>Purpose:</strong> ${escapeHtml(visit.purpose || "-")}</p>
+            <p><strong>Notes:</strong> ${escapeHtml(visit.visit_notes || "-")}</p>
+        `);
+
+        const items = visit.sale_items || [];
+
+        $("#itemCount").text(items.length + " Products");
+
+        const tbody = $("#saleItemsBody");
+        tbody.empty();
+
+        if (!items.length) {
+            tbody.html(`
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">
+                        No products have been added to this visit yet.
+                    </td>
+                </tr>
+            `);
+        } else {
+            items.forEach(function (item) {
+                tbody.append(`
+                    <tr>
+                        <td>${escapeHtml(item.product_name)}</td>
+                        <td>${escapeHtml(item.product_sku)}</td>
+                        <td class="text-center">${item.quantity}</td>
+                        <td class="text-end">${money(item.unit_price)}</td>
+                        <td class="text-end">${money(item.discount_amount)}</td>
+                        <td class="text-end">${escapeHtml(item.gst_rate)}%</td>
+                        <td class="text-end">${money(item.total_amount)}</td>
+                    </tr>
+                `);
+            });
+        }
+
+        $("#totalItems").text(visit.total_items || 0);
+        $("#grandTotal").text(money(visit.total_amount));
+    }
+
+    $.ajax({
+        url: DETAIL_API,
+        type: "GET",
+
+        success: function (visit) {
+            renderVisit(visit);
+        },
+
+        error: function (xhr) {
+            showError(
+                xhr.responseJSON?.detail ||
+                "Unable to load this sales visit."
+            );
+
+            $("#visitNumber").text("Visit not available");
+        }
+    });
+
+});
+</script>
+
+{% endblock %}

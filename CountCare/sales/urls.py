@@ -21,10 +21,11 @@ from sales.views import (
     SalesEmployeeListAPIView,
     CreateSalesVisitAPIView,
     sales_create_page,
+    sales_visits_page,
+    SalesVisitListAPIView,
+    sales_visit_detail_page,
+    SalesVisitDetailAPIView,
 )
-
-
-
 
 
 urlpatterns = [
@@ -134,4 +135,27 @@ urlpatterns = [
         name="sales-create-page",
     ),
 
+    path(
+        "sales-visits/",
+        sales_visits_page,
+        name="sales-visits-page",
+    ),
+
+    path(
+        "visits/",
+        SalesVisitListAPIView.as_view(),
+        name="sales-visits-api",
+    ),
+
+    path(
+        "sales-visits/<int:pk>/",
+        sales_visit_detail_page,
+        name="sales-visit-detail-page",
+    ),
+
+    path(
+        "visits/<int:pk>/",
+        SalesVisitDetailAPIView.as_view(),
+        name="sales-visit-detail-api",
+    ),
 ]
