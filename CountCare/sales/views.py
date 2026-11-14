@@ -53,6 +53,9 @@ from sales.serializers import (
     StockMovementSerializer,
     ReceiveMachineSerializer,
     TransferMachineSerializer,
+    SaleCustomerLookupSerializer,
+    SalesEmployeeSerializer,
+    CreateSalesVisitSerializer,
 )
 
 from sales.services.inventory_service import (
@@ -63,6 +66,9 @@ from sales.services.inventory_service import (
 
 from django.db import transaction
 from rest_framework.generics import RetrieveUpdateAPIView
+
+from customers.models import Customer
+from sales.models import CustomerVisit
 
 # =========================================================
 # INVENTORY API PERMISSION MIXIN
@@ -582,3 +588,128 @@ def stock_movement_page(request):
         request,
         "sales/stock_movements.html"
     )
+
+
+@login_required
+@ensure_csrf_cookie
+@inventory_company_required
+def sales_create_page(request):
+    return render(
+        request,
+        "sales/sales_create.html",
+    )
+
+
+
+# =========================================================
+# SALES CUSTOMER LOOKUP API
+# =========================================================
+
+class SaleCustomerLookupAPIView(
+    InventoryPermissionMixin,
+    ListAPIView,
+):
+
+    serializer_class = SaleCustomerLookupSerializer
+
+    permission_map = {
+        "GET": "sales_view",
+    }
+
+    def get_queryset(self):
+
+        company = self.get_company()
+
+        return (
+            Customer.objects
+            .filter(
+                company=company,
+                status="ACTIVE",
+            )
+            .order_by("business_name", "contact_person")
+        )
+
+
+# =========================================================
+# SALES EMPLOYEE LIST API
+# =========================================================
+
+class SalesEmployeeListAPIView(
+    InventoryPermissionMixin,
+    ListAPIView,
+):
+
+    serializer_class = SalesEmployeeSerializer
+
+    permission_map = {
+        "GET": "sales_view",
+    }
+
+    def get_queryset(self):
+
+        company = self.get_company()
+
+        return (
+            CompanyEmployee.objects
+            .filter(
+                company=company,
+                company__is_active=True,
+                is_active=True,
+                user__is_active=True,
+            )
+            .select_related(
+                "user",
+                "role",
+            )
+            .order_by(
+                "user__first_name",
+                "user__last_name",
+            )
+        )
+
+
+# =========================================================
+# CREATE DRAFT SALES VISIT API
+# =========================================================
+
+class CreateSalesVisitAPIView(
+    InventoryPermissionMixin,
+    APIView,
+):
+
+    permission_map = {
+        "POST": "sales_add",
+    }
+
+    def post(self, request):
+
+        company = self.get_company()
+
+        serializer = CreateSalesVisitSerializer(
+            data=request.data,
+            context={
+                "request": request,
+                "company": company,
+            },
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        visit = serializer.save()
+
+        return Response(
+            {
+                "message": "Draft sales visit created successfully.",
+                "visit_id": visit.id,
+                "visit_number": visit.visit_number,
+                "status": visit.status,
+                "customer_id": visit.customer_id,
+                "salesman_id": visit.salesman_id,
+                "stock_location_id": visit.stock_location_id,
+                "billing_address": visit.billing_address_snapshot,
+                "visit_date": visit.visit_date,
+            },
+            status=status.HTTP_201_CREATED,
+        )

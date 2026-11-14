@@ -1,0 +1,531 @@
+
+{% extends "customers/base.html" %}
+
+{% block title %}Create Sale | CashCount{% endblock %}
+
+{% block page_title %}Create Sale{% endblock %}
+{% block page_subtitle %}Select customer, billing address, salesman and warehouse{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid">
+
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0">New Sales Visit</h5>
+            <small class="text-muted">
+                Create a draft sale. Stock will not be deducted at this stage.
+            </small>
+        </div>
+
+        <div class="card-body">
+
+            <div id="salesMessage"></div>
+
+            <form id="salesCreateForm">
+
+                {% csrf_token %}
+
+                <div class="row g-3">
+
+                    <!-- Customer -->
+                    <div class="col-md-6">
+                        <label for="customer_id" class="form-label">
+                            Customer <span class="text-danger">*</span>
+                        </label>
+
+                        <select class="form-select" id="customer_id" required>
+                            <option value="">Loading customers...</option>
+                        </select>
+                    </div>
+
+                    <!-- Billing Address -->
+                    <div class="col-md-6">
+                        <label for="billing_address_id" class="form-label">
+                            Billing Address <span class="text-danger">*</span>
+                        </label>
+
+                        <select class="form-select" id="billing_address_id" required disabled>
+                            <option value="">Select customer first</option>
+                        </select>
+
+                        <div class="form-text">
+                            Default billing address will be selected automatically when available.
+                        </div>
+                    </div>
+
+                    <!-- Salesman -->
+                    <div class="col-md-6">
+                        <label for="salesman_id" class="form-label">
+                            Salesman <span class="text-danger">*</span>
+                        </label>
+
+                        <select class="form-select" id="salesman_id" required>
+                            <option value="">Loading employees...</option>
+                        </select>
+                    </div>
+
+                    <!-- Warehouse -->
+                    <div class="col-md-6">
+                        <label for="stock_location_id" class="form-label">
+                            Warehouse <span class="text-danger">*</span>
+                        </label>
+
+                        <select class="form-select" id="stock_location_id" required>
+                            <option value="">Loading warehouses...</option>
+                        </select>
+                    </div>
+
+                    <!-- Visit Date -->
+                    <div class="col-md-6">
+                        <label for="visit_date" class="form-label">
+                            Visit Date <span class="text-danger">*</span>
+                        </label>
+
+                        <input
+                            type="date"
+                            class="form-control"
+                            id="visit_date"
+                            required
+                        >
+                    </div>
+
+                    <!-- Visit Time -->
+                    <div class="col-md-6">
+                        <label for="visit_time" class="form-label">
+                            Visit Time
+                        </label>
+
+                        <input
+                            type="time"
+                            class="form-control"
+                            id="visit_time"
+                        >
+                    </div>
+
+                    <!-- Purpose -->
+                    <div class="col-md-12">
+                        <label for="purpose" class="form-label">
+                            Purpose
+                        </label>
+
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="purpose"
+                            maxlength="255"
+                            placeholder="Example: New machine sale"
+                        >
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="col-md-12">
+                        <label for="visit_notes" class="form-label">
+                            Notes
+                        </label>
+
+                        <textarea
+                            class="form-control"
+                            id="visit_notes"
+                            rows="3"
+                            placeholder="Enter additional details..."
+                        ></textarea>
+                    </div>
+
+                </div>
+
+                <hr class="my-4">
+
+                <div class="d-flex justify-content-end gap-2">
+
+                    <button
+                        type="reset"
+                        class="btn btn-outline-secondary"
+                        id="resetSalesForm"
+                    >
+                        Reset
+                    </button>
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary"
+                        id="createSalesButton"
+                    >
+                        Create Draft Sale
+                    </button>
+
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+
+<script>
+$(document).ready(function () {
+
+    const CUSTOMER_API = "/api/sales/customers-for-sale/";
+    const EMPLOYEE_API = "/api/sales/sales-employees/";
+    const LOCATION_API = "/api/sales/locations/";
+    const CREATE_SALE_API = "/api/sales/visits/create/";
+
+    let customersData = [];
+
+    function getCSRFToken() {
+        return $('input[name="csrfmiddlewaretoken"]').val()
+            || $('meta[name="csrf-token"]').attr("content");
+    }
+
+    function showMessage(message, type = "danger") {
+        $("#salesMessage").html(`
+            <div class="alert alert-${type} alert-dismissible fade show">
+                ${escapeHtml(message)}
+                <button type="button" class="btn-close"
+                    data-bs-dismiss="alert"></button>
+            </div>
+        `);
+    }
+
+    function escapeHtml(value) {
+        return $("<div>").text(value ?? "").html();
+    }
+
+    function formatAddress(address) {
+        return [
+            address.address_line_1,
+            address.address_line_2,
+            address.city,
+            address.district,
+            address.state,
+            address.pincode,
+            address.country
+        ].filter(Boolean).join(", ");
+    }
+
+    function loadCustomers() {
+
+        $.ajax({
+            url: CUSTOMER_API,
+            type: "GET",
+
+            success: function (response) {
+
+                customersData = Array.isArray(response)
+                    ? response
+                    : (response.results || []);
+
+                const dropdown = $("#customer_id");
+
+                dropdown.empty().append(
+                    '<option value="">Select Customer</option>'
+                );
+
+                customersData.forEach(function (customer) {
+
+                    const displayName =
+                        customer.business_name ||
+                        customer.contact_person ||
+                        customer.customer_code;
+
+                    dropdown.append(
+                        $("<option>", {
+                            value: customer.id,
+                            text: displayName + " (" +
+                                customer.customer_code + ")"
+                        })
+                    );
+                });
+
+                if (!customersData.length) {
+                    showMessage("No active customers found.", "warning");
+                }
+            },
+
+            error: function () {
+                showMessage("Unable to load customers.");
+                $("#customer_id").html(
+                    '<option value="">Failed to load customers</option>'
+                );
+            }
+        });
+    }
+
+    function loadEmployees() {
+
+        $.ajax({
+            url: EMPLOYEE_API,
+            type: "GET",
+
+            success: function (response) {
+
+                const employees = Array.isArray(response)
+                    ? response
+                    : (response.results || []);
+
+                const dropdown = $("#salesman_id");
+
+                dropdown.empty().append(
+                    '<option value="">Select Salesman</option>'
+                );
+
+                employees.forEach(function (employee) {
+                    dropdown.append(
+                        $("<option>", {
+                            value: employee.id,
+                            text: employee.employee_name +
+                                " (" + employee.role_name + ")"
+                        })
+                    );
+                });
+            },
+
+            error: function () {
+                showMessage("Unable to load sales employees.");
+            }
+        });
+    }
+
+    function loadLocations() {
+
+        $.ajax({
+            url: LOCATION_API,
+            type: "GET",
+
+            success: function (response) {
+
+                const locations = Array.isArray(response)
+                    ? response
+                    : (response.results || []);
+
+                const dropdown = $("#stock_location_id");
+
+                dropdown.empty().append(
+                    '<option value="">Select Warehouse</option>'
+                );
+
+                locations.forEach(function (location) {
+
+                    if (!location.is_active) {
+                        return;
+                    }
+
+                    const label = location.name +
+                        (location.is_default ? " (Default)" : "");
+
+                    dropdown.append(
+                        $("<option>", {
+                            value: location.id,
+                            text: label
+                        })
+                    );
+                });
+
+                const defaultLocation = locations.find(
+                    location => location.is_default && location.is_active
+                );
+
+                if (defaultLocation) {
+                    dropdown.val(defaultLocation.id);
+                }
+            },
+
+            error: function () {
+                showMessage("Unable to load warehouses.");
+            }
+        });
+    }
+
+    function loadCustomerAddresses(customerId) {
+
+        const customer = customersData.find(
+            item => String(item.id) === String(customerId)
+        );
+
+        const dropdown = $("#billing_address_id");
+
+        dropdown.empty();
+
+        if (!customer || !customer.addresses ||
+            customer.addresses.length === 0) {
+
+            dropdown.append(
+                '<option value="">No saved addresses available</option>'
+            );
+
+            dropdown.prop("disabled", true);
+
+            showMessage(
+                "This customer has no saved addresses. Add a customer address before creating a sale.",
+                "warning"
+            );
+
+            return;
+        }
+
+        const billingAddresses = customer.addresses.filter(
+            address => address.address_type === "BILLING"
+        );
+
+        const addresses = billingAddresses.length
+            ? billingAddresses
+            : customer.addresses;
+
+        dropdown.append(
+            '<option value="">Select Billing Address</option>'
+        );
+
+        addresses.forEach(function (address) {
+
+            const label = formatAddress(address) +
+                (address.is_default ? " (Default)" : "");
+
+            dropdown.append(
+                $("<option>", {
+                    value: address.id,
+                    text: label
+                })
+            );
+        });
+
+        dropdown.prop("disabled", false);
+
+        const defaultAddress = addresses.find(
+            address => address.address_type === "BILLING" &&
+                address.is_default
+        );
+
+        if (defaultAddress) {
+            dropdown.val(defaultAddress.id);
+        }
+    }
+
+    $("#customer_id").on("change", function () {
+
+        $("#salesMessage").empty();
+
+        const customerId = $(this).val();
+
+        if (!customerId) {
+            $("#billing_address_id")
+                .prop("disabled", true)
+                .html('<option value="">Select customer first</option>');
+            return;
+        }
+
+        loadCustomerAddresses(customerId);
+    });
+
+    $("#salesCreateForm").on("submit", function (event) {
+
+        event.preventDefault();
+
+        const payload = {
+            customer_id: $("#customer_id").val(),
+            billing_address_id: $("#billing_address_id").val(),
+            salesman_id: $("#salesman_id").val(),
+            stock_location_id: $("#stock_location_id").val(),
+            visit_date: $("#visit_date").val(),
+            visit_time: $("#visit_time").val() || null,
+            purpose: $("#purpose").val(),
+            visit_notes: $("#visit_notes").val()
+        };
+
+        if (
+            !payload.customer_id ||
+            !payload.billing_address_id ||
+            !payload.salesman_id ||
+            !payload.stock_location_id ||
+            !payload.visit_date
+        ) {
+            showMessage("Please fill in all required fields.");
+            return;
+        }
+
+        const button = $("#createSalesButton");
+
+        button.prop("disabled", true).text("Creating...");
+
+        $.ajax({
+            url: CREATE_SALE_API,
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify(payload),
+
+            headers: {
+                "X-CSRFToken": getCSRFToken()
+            },
+
+            success: function (response) {
+
+                showMessage(
+                    "Draft sale created successfully. Visit Number: " +
+                    response.visit_number,
+                    "success"
+                );
+
+                $("#salesCreateForm")[0].reset();
+
+                $("#billing_address_id")
+                    .prop("disabled", true)
+                    .html('<option value="">Select customer first</option>');
+
+                $("#visit_date").val(
+                    new Date().toLocaleDateString("en-CA")
+                );
+            },
+
+            error: function (xhr) {
+
+                let message = "Unable to create draft sale.";
+
+                if (xhr.responseJSON) {
+
+                    if (xhr.responseJSON.detail) {
+                        message = xhr.responseJSON.detail;
+                    } else {
+                        message = Object.entries(xhr.responseJSON)
+                            .map(([key, value]) =>
+                                key + ": " +
+                                (Array.isArray(value) ? value.join(", ") : value)
+                            )
+                            .join(" | ");
+                    }
+                }
+
+                showMessage(message);
+            },
+
+            complete: function () {
+                button.prop("disabled", false)
+                    .text("Create Draft Sale");
+            }
+        });
+    });
+
+    $("#resetSalesForm").on("click", function () {
+        $("#salesMessage").empty();
+
+        $("#billing_address_id")
+            .prop("disabled", true)
+            .html('<option value="">Select customer first</option>');
+    });
+
+    // Default visit date to today.
+    $("#visit_date").val(
+        new Date().toLocaleDateString("en-CA")
+    );
+
+    // Load dropdown data.
+    loadCustomers();
+    loadEmployees();
+    loadLocations();
+
+});
+</script>
+
+{% endblock %}

@@ -16,7 +16,11 @@ from sales.views import (
     stock_location_page,
     machine_register_page,
     stock_movement_page,
-    StockLocationDetailAPIView
+    StockLocationDetailAPIView,
+    SaleCustomerLookupAPIView,
+    SalesEmployeeListAPIView,
+    CreateSalesVisitAPIView,
+    sales_create_page,
 )
 
 
@@ -104,6 +108,30 @@ urlpatterns = [
         "locations/<int:pk>/",
         StockLocationDetailAPIView.as_view(),
         name="sales-stock-location-detail",
+    ),
+
+    path(
+        "customers-for-sale/",
+        SaleCustomerLookupAPIView.as_view(),
+        name="sales-customers-for-sale",
+    ),
+
+    path(
+        "sales-employees/",
+        SalesEmployeeListAPIView.as_view(),
+        name="sales-employees",
+    ),
+
+    path(
+        "visits/create/",
+        CreateSalesVisitAPIView.as_view(),
+        name="sales-create-visit",
+    ),
+
+    path(
+        "create-sale/",
+        sales_create_page,
+        name="sales-create-page",
     ),
 
 ]

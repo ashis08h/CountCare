@@ -401,6 +401,16 @@ class CustomerVisit(models.Model):
         blank=True,
     )
 
+    billing_address = models.ForeignKey(
+        "customers.CustomerAddress",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sales_visits",
+    )
+
+    billing_address_snapshot = models.TextField(blank=True)
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
