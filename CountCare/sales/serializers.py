@@ -14,7 +14,9 @@ from sales.models import (
 from customers.models import Customer, CustomerAddress
 from accounts.models import CompanyEmployee
 from sales.models import CustomerVisit
-from sales.models import VisitSaleItem
+from sales.models import VisitSaleItem, VisitSaleItemMachine
+from django.db.models import Exists, OuterRef
+
 
 
 class StockLocationSerializer(serializers.ModelSerializer):
@@ -682,3 +684,214 @@ class SalesVisitDetailSerializer(serializers.ModelSerializer):
             Decimal("0.00"),
         )
 
+
+
+class AvailableSaleMachineSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = CustomerMachine
+        fields = [
+            "id",
+            "serial_number",
+            "status",
+        ]
+
+
+class AvailableSaleProductSerializer(serializers.ModelSerializer):
+
+    available_quantity = serializers.IntegerField(read_only=True)
+    available_machines = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MachineProduct
+        fields = [
+            "id",
+            "name",
+            "brand",
+            "model_number",
+            "sku",
+            "hsn_code",
+            "mrp",
+            "selling_price",
+            "gst_rate",
+            "available_quantity",
+            "available_machines",
+        ]
+
+    def get_available_machines(self, obj):
+
+        company = self.context["company"]
+        location = self.context["location"]
+        visit = self.context["visit"]
+
+        selected_elsewhere = VisitSaleItemMachine.objects.filter(
+            machine_id=OuterRef("pk")
+        ).exclude(
+            sale_item__visit=visit
+        )
+
+        machines = (
+            CustomerMachine.objects
+            .filter(
+                company=company,
+                product=obj,
+                location=location,
+                status=CustomerMachine.MachineStatus.IN_STOCK,
+                customer__isnull=True,
+                sale_item__isnull=True,
+            )
+            .annotate(
+                selected_elsewhere=Exists(selected_elsewhere)
+            )
+            .filter(selected_elsewhere=False)
+            .order_by("serial_number")
+        )
+
+        return AvailableSaleMachineSerializer(
+            machines,
+            many=True,
+        ).data
+
+
+class AddSaleItemSerializer(serializers.Serializer):
+
+    product_id = serializers.IntegerField(min_value=1)
+
+    machine_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+    )
+
+    unit_price = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=0,
+    )
+
+    discount_amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=0,
+        required=False,
+        default=0,
+    )
+
+    gst_rate = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        min_value=0,
+        max_value=100,
+    )
+
+    def validate(self, attrs):
+
+        company = self.context["company"]
+        visit = self.context["visit"]
+
+        if visit.status != CustomerVisit.VisitStatus.DRAFT:
+            raise serializers.ValidationError({
+                "visit": "Products can only be added to draft visits."
+            })
+
+        if not visit.stock_location:
+            raise serializers.ValidationError({
+                "visit": "This visit has no warehouse selected."
+            })
+
+        machine_ids = attrs["machine_ids"]
+
+        if len(machine_ids) != len(set(machine_ids)):
+            raise serializers.ValidationError({
+                "machine_ids": "Duplicate machine selections are not allowed."
+            })
+
+        try:
+            product = MachineProduct.objects.get(
+                pk=attrs["product_id"],
+                company=company,
+                is_active=True,
+            )
+        except MachineProduct.DoesNotExist:
+            raise serializers.ValidationError({
+                "product_id": "Invalid or inactive product."
+            })
+
+        machines = list(
+            CustomerMachine.objects.filter(
+                pk__in=machine_ids,
+                company=company,
+                product=product,
+                location=visit.stock_location,
+                status=CustomerMachine.MachineStatus.IN_STOCK,
+                customer__isnull=True,
+                sale_item__isnull=True,
+            )
+        )
+
+        if len(machines) != len(machine_ids):
+            raise serializers.ValidationError({
+                "machine_ids": (
+                    "One or more selected machines are unavailable, "
+                    "already sold, or do not belong to this product "
+                    "and warehouse."
+                )
+            })
+
+        already_selected = VisitSaleItemMachine.objects.filter(
+            machine_id__in=machine_ids
+        ).exists()
+
+        if already_selected:
+            raise serializers.ValidationError({
+                "machine_ids": (
+                    "One or more machines are already selected "
+                    "in another draft sale."
+                )
+            })
+
+        attrs["product"] = product
+        attrs["machines"] = machines
+        attrs["quantity"] = len(machines)
+
+        return attrs
+
+    def create(self, validated_data):
+
+        visit = self.context["visit"]
+
+        product = validated_data["product"]
+        machines = validated_data["machines"]
+
+        quantity = validated_data["quantity"]
+
+        unit_price = validated_data["unit_price"]
+        discount_amount = validated_data["discount_amount"]
+        gst_rate = validated_data["gst_rate"]
+
+        gross_amount = unit_price * quantity
+
+        if discount_amount > gross_amount:
+            raise serializers.ValidationError({
+                "discount_amount": (
+                    "Discount cannot exceed the gross amount."
+                )
+            })
+
+        sale_item = VisitSaleItem.objects.create(
+            visit=visit,
+            product=product,
+            quantity=quantity,
+            unit_price=unit_price,
+            discount_amount=discount_amount,
+            gst_rate=gst_rate,
+        )
+
+        VisitSaleItemMachine.objects.bulk_create([
+            VisitSaleItemMachine(
+                sale_item=sale_item,
+                machine=machine,
+            )
+            for machine in machines
+        ])
+
+        return sale_item

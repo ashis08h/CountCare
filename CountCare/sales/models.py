@@ -921,3 +921,48 @@ class VisitPayment(models.Model):
 
     def __str__(self):
         return f"{self.receipt_number} - {self.amount}"
+
+
+
+# =========================================================
+# 6A. DRAFT SALE ITEM MACHINE SELECTION
+# =========================================================
+
+class VisitSaleItemMachine(models.Model):
+    """
+    Stores machine serial numbers selected for a draft sale item.
+
+    Selection does not deduct stock or mark a machine as sold.
+    """
+
+    sale_item = models.ForeignKey(
+        VisitSaleItem,
+        on_delete=models.CASCADE,
+        related_name="machine_selections",
+    )
+
+    machine = models.ForeignKey(
+        CustomerMachine,
+        on_delete=models.PROTECT,
+        related_name="draft_sale_selections",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "sales_visit_item_machines"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["machine"],
+                name="unique_machine_draft_sale_selection",
+            ),
+            models.UniqueConstraint(
+                fields=["sale_item", "machine"],
+                name="unique_machine_per_sale_item",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.sale_item} - {self.machine.serial_number}"
+
