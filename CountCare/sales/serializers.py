@@ -580,6 +580,7 @@ class SalesVisitItemDetailSerializer(serializers.ModelSerializer):
         decimal_places=2,
         read_only=True,
     )
+    serial_numbers = serializers.SerializerMethodField()
 
     class Meta:
         model = VisitSaleItem
@@ -596,7 +597,15 @@ class SalesVisitItemDetailSerializer(serializers.ModelSerializer):
             "taxable_amount",
             "gst_amount",
             "total_amount",
+            "serial_numbers"
         ]
+
+    def get_serial_numbers(self, obj):
+        return list(
+            obj.machine_selections
+            .select_related("machine")
+            .values_list("machine__serial_number", flat=True)
+        )
 
 
 class SalesVisitDetailSerializer(serializers.ModelSerializer):
@@ -726,8 +735,6 @@ class AvailableSaleProductSerializer(serializers.ModelSerializer):
 
         selected_elsewhere = VisitSaleItemMachine.objects.filter(
             machine_id=OuterRef("pk")
-        ).exclude(
-            sale_item__visit=visit
         )
 
         machines = (
@@ -895,3 +902,74 @@ class AddSaleItemSerializer(serializers.Serializer):
         ])
 
         return sale_item
+
+
+
+class UpdateSaleItemSerializer(serializers.Serializer):
+
+    unit_price = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=0,
+        required=False,
+    )
+
+    discount_amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=0,
+        required=False,
+    )
+
+    gst_rate = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        min_value=0,
+        max_value=100,
+        required=False,
+    )
+
+    def validate(self, attrs):
+
+        if not attrs:
+            raise serializers.ValidationError(
+                "At least one field must be provided."
+            )
+
+        item = self.instance
+        visit = self.context["visit"]
+
+        if visit.status != CustomerVisit.VisitStatus.DRAFT:
+            raise serializers.ValidationError({
+                "visit": "Only draft sales visits can be edited."
+            })
+
+        unit_price = attrs.get("unit_price", item.unit_price)
+        discount_amount = attrs.get(
+            "discount_amount",
+            item.discount_amount,
+        )
+
+        gross_amount = unit_price * item.quantity
+
+        if discount_amount > gross_amount:
+            raise serializers.ValidationError({
+                "discount_amount": (
+                    "Discount cannot exceed the gross amount."
+                )
+            })
+
+        return attrs
+
+    def update(self, instance, validated_data):
+
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+
+        instance.save(
+            update_fields=[
+                *validated_data.keys(),
+            ]
+        )
+
+        return instance

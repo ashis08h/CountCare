@@ -43,6 +43,10 @@ from sales.models import (
     InventoryStock,
     CustomerMachine,
     StockMovement,
+    CustomerVisit,
+    VisitSaleItem,
+    VisitSaleItemMachine,
+    InventoryStock,
 )
 
 from sales.serializers import (
@@ -57,7 +61,10 @@ from sales.serializers import (
     SalesEmployeeSerializer,
     CreateSalesVisitSerializer,
     SalesVisitListSerializer,
-    SalesVisitDetailSerializer
+    SalesVisitDetailSerializer,
+    AvailableSaleProductSerializer,
+    AddSaleItemSerializer,
+    UpdateSaleItemSerializer
 )
 
 from sales.services.inventory_service import (
@@ -66,7 +73,7 @@ from sales.services.inventory_service import (
 )
 
 
-from django.db import transaction
+from django.db import models, transaction
 from rest_framework.generics import RetrieveUpdateAPIView
 
 from customers.models import Customer
@@ -938,3 +945,259 @@ def sales_visit_detail_page(request, pk):
         "sales/sales_visit_detail.html",
         {"visit_id": pk},
     )
+
+
+
+# =========================================================
+# AVAILABLE PRODUCTS FOR A SALES VISIT
+# =========================================================
+
+class AvailableSaleProductsAPIView(
+    InventoryPermissionMixin,
+    ListAPIView,
+):
+
+    serializer_class = AvailableSaleProductSerializer
+
+    permission_map = {
+        "GET": "sales_view",
+    }
+
+    def get_queryset(self):
+
+        company = self.get_company()
+
+        visit = get_object_or_404(
+            CustomerVisit,
+            pk=self.kwargs["pk"],
+            company=company,
+        )
+
+        self.visit = visit
+
+        if not visit.stock_location:
+            return MachineProduct.objects.none()
+
+        # Only show products with available stock.
+        stock_product_ids = (
+            InventoryStock.objects
+            .filter(
+                company=company,
+                location=visit.stock_location,
+                quantity_on_hand__gt=0,
+            )
+            .exclude(
+                quantity_on_hand__lte=models.F("reserved_quantity")
+            )
+            .values_list("product_id", flat=True)
+        )
+
+        return (
+            MachineProduct.objects
+            .filter(
+                company=company,
+                is_active=True,
+                id__in=stock_product_ids,
+            )
+            .order_by("name")
+        )
+
+    def get_serializer_context(self):
+
+        context = super().get_serializer_context()
+
+        context.update({
+            "company": self.get_company(),
+            "visit": self.visit,
+            "location": self.visit.stock_location,
+        })
+
+        return context
+
+    def list(self, request, *args, **kwargs):
+
+        queryset = self.get_queryset()
+
+        serializer = self.get_serializer(
+            queryset,
+            many=True,
+        )
+
+        data = serializer.data
+
+        # Only show products with at least one available serial number.
+        data = [
+            product for product in data
+            if product["available_machines"]
+        ]
+
+        for product in data:
+            product["available_quantity"] = len(
+                product["available_machines"]
+            )
+
+        return Response(data)
+
+
+# =========================================================
+# ADD PRODUCT TO DRAFT SALES VISIT
+# =========================================================
+
+class AddSaleItemAPIView(
+    InventoryPermissionMixin,
+    APIView,
+):
+
+    permission_map = {
+        "POST": "sales_add",
+    }
+
+    @transaction.atomic
+    def post(self, request, pk):
+
+        company = self.get_company()
+
+        visit = get_object_or_404(
+            CustomerVisit.objects.select_for_update(),
+            pk=pk,
+            company=company,
+        )
+
+        serializer = AddSaleItemSerializer(
+            data=request.data,
+            context={
+                "company": company,
+                "visit": visit,
+            },
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            with transaction.atomic():
+                sale_item = serializer.save()
+
+        except IntegrityError:
+            raise ValidationError({
+                "machine_ids": (
+                    "A selected machine was selected by another "
+                    "draft sale. Refresh available stock and try again."
+                )
+            })
+
+        return Response(
+            {
+                "message": "Product added to draft sale successfully.",
+                "item_id": sale_item.id,
+                "product_id": sale_item.product_id,
+                "product_name": sale_item.product.name,
+                "quantity": sale_item.quantity,
+                "unit_price": sale_item.unit_price,
+                "discount_amount": sale_item.discount_amount,
+                "gst_rate": sale_item.gst_rate,
+                "gross_amount": sale_item.gross_amount,
+                "taxable_amount": sale_item.taxable_amount,
+                "gst_amount": sale_item.gst_amount,
+                "total_amount": sale_item.total_amount,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+
+# =====================================================
+# EDIT AND REMOVE SALE ITEM
+# =====================================================
+
+class SaleItemDetailAPIView(
+    InventoryPermissionMixin,
+    APIView,
+):
+
+    permission_map = {
+        "PATCH": "sales_change",
+        "DELETE": "sales_delete",
+    }
+
+    def get_visit_and_item(self, request, pk, item_id):
+
+        company = self.get_company()
+
+        visit = get_object_or_404(
+            CustomerVisit.objects.select_for_update(),
+            pk=pk,
+            company=company,
+        )
+
+        if visit.status != CustomerVisit.VisitStatus.DRAFT:
+            raise ValidationError({
+                "visit": "Only draft sales visits can be modified."
+            })
+
+        sale_item = get_object_or_404(
+            VisitSaleItem.objects.select_for_update().select_related(
+                "product"
+            ),
+            pk=item_id,
+            visit=visit,
+        )
+
+        return visit, sale_item
+
+    @transaction.atomic
+    def patch(self, request, pk, item_id):
+
+        visit, sale_item = self.get_visit_and_item(
+            request,
+            pk,
+            item_id,
+        )
+
+        serializer = UpdateSaleItemSerializer(
+            sale_item,
+            data=request.data,
+            partial=True,
+            context={
+                "visit": visit,
+            },
+        )
+
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response({
+            "message": "Sale item updated successfully.",
+            "item_id": sale_item.id,
+            "unit_price": str(sale_item.unit_price),
+            "discount_amount": str(sale_item.discount_amount),
+            "gst_rate": str(sale_item.gst_rate),
+            "total_amount": str(sale_item.total_amount),
+        })
+
+    @transaction.atomic
+    def delete(self, request, pk, item_id):
+
+        visit, sale_item = self.get_visit_and_item(
+            request,
+            pk,
+            item_id,
+        )
+
+        sale_item_id = sale_item.id
+
+        # Deleting the sale item also deletes its
+        # VisitSaleItemMachine selection records through
+        # the existing foreign-key cascade.
+        # First release all machine selections associated
+        # with this draft sale item.
+        VisitSaleItemMachine.objects.filter(
+            sale_item=sale_item
+        ).delete()
+
+        # Now remove the sale item itself.
+        sale_item.delete()
+
+        return Response({
+            "message": "Sale item removed successfully.",
+            "item_id": sale_item_id,
+        })

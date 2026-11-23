@@ -25,6 +25,9 @@ from sales.views import (
     SalesVisitListAPIView,
     sales_visit_detail_page,
     SalesVisitDetailAPIView,
+    AvailableSaleProductsAPIView,
+    AddSaleItemAPIView,
+    SaleItemDetailAPIView
 )
 
 
@@ -157,5 +160,23 @@ urlpatterns = [
         "visits/<int:pk>/",
         SalesVisitDetailAPIView.as_view(),
         name="sales-visit-detail-api",
+    ),
+
+    path(
+        "visits/<int:pk>/available-products/",
+        AvailableSaleProductsAPIView.as_view(),
+        name="sales-available-products",
+    ),
+
+    path(
+        "visits/<int:pk>/items/",
+        AddSaleItemAPIView.as_view(),
+        name="sales-add-item",
+    ),
+
+    path(
+        "visits/<int:pk>/items/<int:item_id>/",
+        SaleItemDetailAPIView.as_view(),
+        name="sales-sale-item-detail",
     ),
 ]
