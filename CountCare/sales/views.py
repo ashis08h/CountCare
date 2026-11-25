@@ -47,7 +47,13 @@ from sales.models import (
     VisitSaleItem,
     VisitSaleItemMachine,
     InventoryStock,
+    VisitPayment
 )
+
+from decimal import Decimal
+from django.db.models import Sum
+
+from sales.services.inventory_service import record_stock_movement
 
 from sales.serializers import (
     MachineProductSerializer,
@@ -64,7 +70,9 @@ from sales.serializers import (
     SalesVisitDetailSerializer,
     AvailableSaleProductSerializer,
     AddSaleItemSerializer,
-    UpdateSaleItemSerializer
+    UpdateSaleItemSerializer,
+    VisitPaymentSerializer,
+    CreateVisitPaymentSerializer,
 )
 
 from sales.services.inventory_service import (
@@ -1201,3 +1209,283 @@ class SaleItemDetailAPIView(
             "message": "Sale item removed successfully.",
             "item_id": sale_item_id,
         })
+
+
+
+class ConfirmSalesVisitAPIView(InventoryPermissionMixin, APIView):
+    permission_map = {
+        "POST": "sales_approve",
+    }
+
+    @transaction.atomic
+    def post(self, request, pk):
+        company = self.get_company()
+
+        # Lock the visit to prevent simultaneous confirmation.
+        visit = get_object_or_404(
+            CustomerVisit.objects.select_for_update().select_related(
+                "customer",
+                "stock_location",
+            ),
+            pk=pk,
+            company=company,
+        )
+
+        if visit.status != CustomerVisit.VisitStatus.DRAFT:
+            raise ValidationError({
+                "visit": "Only draft sales visits can be confirmed."
+            })
+
+        if not visit.stock_location:
+            raise ValidationError({
+                "stock_location": "Please select a stock location before confirming."
+            })
+
+        sale_items = list(
+            VisitSaleItem.objects.select_for_update()
+            .filter(visit=visit)
+            .select_related("product")
+            .order_by("id")
+        )
+
+        if not sale_items:
+            raise ValidationError({
+                "sale_items": "Add at least one product before confirming the sale."
+            })
+
+        for sale_item in sale_items:
+            # Find the physical machines selected for this sale item.
+            selections = list(
+                VisitSaleItemMachine.objects.filter(
+                    sale_item=sale_item
+                ).values_list("machine_id", flat=True)
+            )
+
+            if len(selections) != sale_item.quantity:
+                raise ValidationError({
+                    "sale_items": (
+                        f"Selected machine count does not match the quantity "
+                        f"for product {sale_item.product.name}."
+                    )
+                })
+
+            # Lock the selected machine records.
+            machines = list(
+                CustomerMachine.objects.select_for_update()
+                .filter(
+                    pk__in=selections,
+                    company=company,
+                )
+                .order_by("id")
+            )
+
+            if len(machines) != len(selections):
+                raise ValidationError({
+                    "machines": "One or more selected machines are unavailable."
+                })
+
+            for machine in machines:
+                if machine.product_id != sale_item.product_id:
+                    raise ValidationError({
+                        "machines": (
+                            f"Machine {machine.serial_number} does not belong "
+                            "to the selected product."
+                        )
+                    })
+
+                if machine.location_id != visit.stock_location_id:
+                    raise ValidationError({
+                        "machines": (
+                            f"Machine {machine.serial_number} is not available "
+                            "at the selected stock location."
+                        )
+                    })
+
+                if machine.status != CustomerMachine.MachineStatus.IN_STOCK:
+                    raise ValidationError({
+                        "machines": (
+                            f"Machine {machine.serial_number} is no longer "
+                            "in stock."
+                        )
+                    })
+
+                if machine.customer_id is not None or machine.sale_item_id is not None:
+                    raise ValidationError({
+                        "machines": (
+                            f"Machine {machine.serial_number} has already "
+                            "been assigned to another sale."
+                        )
+                    })
+
+                # Deduct one physical machine and create its SALE audit record.
+                try:
+                    record_stock_movement(
+                        company=company,
+                        product=sale_item.product,
+                        location=visit.stock_location,
+                        movement_type=StockMovement.MovementType.SALE,
+                        quantity=1,
+                        user=request.user,
+                        reference_number=visit.visit_number,
+                        notes=f"Sale confirmed for visit {visit.visit_number}",
+                        machine=machine,
+                        visit=visit,
+                        sale_item=sale_item,
+                    )
+                except DjangoValidationError as exc:
+                    detail = getattr(exc, "message_dict", None) or exc.messages
+                    raise ValidationError(detail)
+
+                # Assign the machine to the customer and sale item.
+                machine.status = CustomerMachine.MachineStatus.SOLD
+                machine.customer = visit.customer
+                machine.sale_item = sale_item
+
+                machine.save(
+                    update_fields=[
+                        "status",
+                        "customer",
+                        "sale_item",
+                        "updated_at",
+                    ]
+                )
+
+        # Mark the visit completed only after every machine is processed.
+        visit.status = CustomerVisit.VisitStatus.COMPLETED
+        visit.save(update_fields=["status", "updated_at"])
+
+        visit.refresh_from_db()
+
+        return Response(
+            {
+                "message": "Sale confirmed successfully.",
+                "visit": SalesVisitDetailSerializer(visit).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+
+class VisitPaymentAPIView(InventoryPermissionMixin, APIView):
+
+    permission_map = {
+        "GET": "payments_view",
+        "POST": "payments_add",
+    }
+
+    def get_visit(self, pk):
+        return get_object_or_404(
+            CustomerVisit.objects.filter(
+                company=self.get_company()
+            ),
+            pk=pk,
+        )
+
+    def get_payment_summary(self, visit):
+
+        total_amount = sum(
+            (
+                item.total_amount
+                for item in visit.sale_items.all()
+            ),
+            Decimal("0.00"),
+        )
+
+        total_received = (
+            VisitPayment.objects.filter(
+                visit=visit,
+                payment_status=VisitPayment.PaymentStatus.RECEIVED,
+            ).aggregate(total=Sum("amount"))["total"]
+            or Decimal("0.00")
+        )
+
+        balance_amount = total_amount - total_received
+
+        return {
+            "total_amount": total_amount,
+            "total_received": total_received,
+            "balance_amount": balance_amount,
+        }
+
+    def get(self, request, pk):
+
+        visit = self.get_visit(pk)
+
+        payments = (
+            VisitPayment.objects.filter(visit=visit)
+            .select_related("received_by")
+            .order_by("-payment_date", "-created_at")
+        )
+
+        summary = self.get_payment_summary(visit)
+
+        return Response({
+            "visit_id": visit.id,
+            "visit_number": visit.visit_number,
+            "payments": VisitPaymentSerializer(
+                payments,
+                many=True,
+            ).data,
+            "summary": summary,
+        })
+
+    @transaction.atomic
+    def post(self, request, pk):
+
+        company = self.get_company()
+
+        visit = get_object_or_404(
+            CustomerVisit.objects.select_for_update(),
+            pk=pk,
+            company=company,
+        )
+
+        if visit.status != CustomerVisit.VisitStatus.COMPLETED:
+            raise ValidationError({
+                "visit": "Payments can only be recorded for completed sales visits."
+            })
+
+        serializer = CreateVisitPaymentSerializer(
+            data=request.data
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+
+        summary = self.get_payment_summary(visit)
+
+        amount = data["amount"]
+
+        if summary["balance_amount"] <= Decimal("0.00"):
+            raise ValidationError({
+                "amount": "This sale has already been fully paid."
+            })
+
+        if amount > summary["balance_amount"]:
+            raise ValidationError({
+                "amount": (
+                    f"Payment exceeds the outstanding balance of "
+                    f"{summary['balance_amount']}."
+                )
+            })
+
+        payment = VisitPayment.objects.create(
+            visit=visit,
+            amount=amount,
+            payment_mode=data["payment_mode"],
+            payment_status=VisitPayment.PaymentStatus.RECEIVED,
+            transaction_reference=data.get(
+                "transaction_reference", ""
+            ),
+            notes=data.get("notes", ""),
+            received_by=request.user,
+        )
+
+        updated_summary = self.get_payment_summary(visit)
+
+        return Response({
+            "message": "Payment recorded successfully.",
+            "payment": VisitPaymentSerializer(payment).data,
+            "summary": updated_summary,
+        }, status=status.HTTP_201_CREATED)

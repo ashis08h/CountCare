@@ -18,10 +18,21 @@
         </div>
 
         <div class="d-flex gap-2">
+
+            <button
+                type="button"
+                class="btn btn-success"
+                id="confirmSaleButton"
+                style="display:none;">
+                <i class="bi bi-check-circle"></i>
+                Confirm Sale
+            </button>
+
             <a href="{% url 'sales-visits-page' %}"
                class="btn btn-outline-secondary">
                 <i class="bi bi-arrow-left"></i> Back to Visits
             </a>
+
         </div>
     </div>
 
@@ -137,6 +148,91 @@
         </div>
 
     </div>
+
+
+<!-- PAYMENT SUMMARY -->
+<div class="card border-0 shadow-sm mb-4">
+
+    <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h6 class="mb-0">Payment Summary</h6>
+
+        <button
+            type="button"
+            class="btn btn-sm btn-success"
+            id="recordPaymentButton"
+            style="display:none;">
+            <i class="bi bi-plus-circle"></i>
+            Record Payment
+        </button>
+    </div>
+
+    <div class="card-body">
+
+        <div class="row g-3">
+
+            <div class="col-md-4">
+                <div class="border rounded p-3 h-100">
+                    <small class="text-muted">Total Sale Amount</small>
+                    <h4 class="mb-0" id="paymentTotalAmount">₹0.00</h4>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="border rounded p-3 h-100">
+                    <small class="text-muted">Amount Received</small>
+                    <h4 class="mb-0 text-success" id="paymentReceivedAmount">₹0.00</h4>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="border rounded p-3 h-100">
+                    <small class="text-muted">Outstanding Balance</small>
+                    <h4 class="mb-0 text-danger" id="paymentBalanceAmount">₹0.00</h4>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+<!-- PAYMENT HISTORY -->
+<div class="card border-0 shadow-sm mb-4">
+
+    <div class="card-header bg-white">
+        <h6 class="mb-0">Payment History</h6>
+    </div>
+
+    <div class="table-responsive">
+
+        <table class="table table-hover align-middle mb-0">
+
+            <thead class="table-light">
+                <tr>
+                    <th>Receipt Number</th>
+                    <th>Date</th>
+                    <th>Payment Mode</th>
+                    <th class="text-end">Amount</th>
+                    <th>Transaction Reference</th>
+                    <th>Received By</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody id="paymentHistoryBody">
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-4">
+                        Loading payment history...
+                    </td>
+                </tr>
+            </tbody>
+
+        </table>
+
+    </div>
+</div>
+
 
 </div>
 
@@ -336,6 +432,110 @@
 </div>
 
 
+<!-- RECORD PAYMENT MODAL -->
+<div class="modal fade" id="recordPaymentModal" tabindex="-1">
+
+    <div class="modal-dialog">
+
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title">Record Customer Payment</h5>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal">
+                </button>
+            </div>
+
+            <div class="modal-body">
+
+                <div id="paymentModalMessage"></div>
+
+                <div class="mb-3">
+                    <label class="form-label">Outstanding Balance</label>
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="paymentOutstandingBalance"
+                        readonly>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Payment Amount *</label>
+                    <input
+                        type="number"
+                        class="form-control"
+                        id="paymentAmount"
+                        min="0.01"
+                        step="0.01"
+                        required>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Payment Mode *</label>
+
+                    <select class="form-select" id="paymentMode">
+                        <option value="">Select Payment Mode</option>
+                        <option value="CASH">Cash</option>
+                        <option value="UPI">UPI</option>
+                        <option value="BANK_TRANSFER">Bank Transfer</option>
+                        <option value="CARD">Card</option>
+                        <option value="CHEQUE">Cheque</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">
+                        Transaction Reference
+                    </label>
+
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="paymentTransactionReference"
+                        maxlength="150"
+                        placeholder="UPI / Bank / Cheque reference">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+
+                    <textarea
+                        class="form-control"
+                        id="paymentNotes"
+                        rows="2"
+                        placeholder="Optional payment notes">
+                    </textarea>
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+
+                <button
+                    type="button"
+                    class="btn btn-outline-secondary"
+                    data-bs-dismiss="modal">
+                    Cancel
+                </button>
+
+                <button
+                    type="button"
+                    class="btn btn-success"
+                    id="savePaymentButton">
+                    Save Payment
+                </button>
+
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+
 
 <!-- =====================================================
      EDIT SALE ITEM MODAL
@@ -504,6 +704,20 @@ $(document).ready(function () {
 
     const ADD_ITEM_API =
         `/api/sales/visits/${VISIT_ID}/items/`;
+
+    const PAYMENT_API =
+    `/api/sales/visits/${VISIT_ID}/payments/`;
+
+    let currentPaymentSummary = {
+        total_amount: 0,
+        total_received: 0,
+        balance_amount: 0
+    };
+
+    let currentPayments = [];
+
+    const CONFIRM_SALE_API =
+    `/api/sales/visits/${VISIT_ID}/confirm/`;
 
     let availableProducts = [];
 
@@ -1038,6 +1252,510 @@ $(document).ready(function () {
     }
 
 
+// =====================================================
+// PAYMENT MANAGEMENT
+// =====================================================
+
+const recordPaymentModal = new bootstrap.Modal(
+    document.getElementById("recordPaymentModal")
+);
+
+
+// Show payment modal message
+function showPaymentMessage(message, type = "danger") {
+
+    $("#paymentModalMessage").html(`
+        <div class="alert alert-${type}">
+            ${escapeHtml(message)}
+        </div>
+    `);
+
+}
+
+
+// Load payment history
+function loadPaymentHistory() {
+
+    $.ajax({
+
+        url: PAYMENT_API,
+        type: "GET",
+
+        success: function (response) {
+
+            currentPayments = response.payments || [];
+
+            currentPaymentSummary = response.summary || {
+                total_amount: 0,
+                total_received: 0,
+                balance_amount: 0
+            };
+
+            renderPaymentSummary();
+
+            renderPaymentHistory();
+
+        },
+
+        error: function (xhr) {
+
+            showError(
+                xhr.responseJSON?.detail ||
+                "Unable to load payment history."
+            );
+
+        }
+
+    });
+
+}
+
+
+// Render payment summary
+function renderPaymentSummary() {
+
+    const summary = currentPaymentSummary;
+
+    $("#paymentTotalAmount").text(
+        money(summary.total_amount)
+    );
+
+    $("#paymentReceivedAmount").text(
+        money(summary.total_received)
+    );
+
+    $("#paymentBalanceAmount").text(
+        money(summary.balance_amount)
+    );
+
+    const isCompleted =
+        currentVisit?.status === "COMPLETED";
+
+    const hasBalance =
+        Number(summary.balance_amount) > 0;
+
+    if (isCompleted && hasBalance) {
+
+        $("#recordPaymentButton").show();
+
+    } else {
+
+        $("#recordPaymentButton").hide();
+
+    }
+
+}
+
+
+// Render payment history
+function renderPaymentHistory() {
+
+    const tbody = $("#paymentHistoryBody");
+
+    tbody.empty();
+
+    if (!currentPayments.length) {
+
+        tbody.html(`
+            <tr>
+                <td colspan="8"
+                    class="text-center text-muted py-4">
+
+                    No payments recorded yet.
+
+                </td>
+            </tr>
+        `);
+
+        return;
+
+    }
+
+    currentPayments.forEach(function (payment) {
+
+        const paymentDate = payment.payment_date
+            ? new Date(payment.payment_date).toLocaleString("en-IN")
+            : "-";
+
+        let statusClass = "secondary";
+
+        if (payment.payment_status === "RECEIVED") {
+            statusClass = "success";
+        } else if (payment.payment_status === "PENDING") {
+            statusClass = "warning";
+        } else if (payment.payment_status === "REFUNDED") {
+            statusClass = "danger";
+        }
+
+        const receiptButton = `
+            <button
+                type="button"
+                class="btn btn-sm btn-outline-primary print-receipt"
+                data-payment-id="${payment.id}">
+
+                <i class="bi bi-printer"></i>
+                Print
+
+            </button>
+        `;
+
+        tbody.append(`
+
+            <tr>
+
+                <td>
+                    ${escapeHtml(payment.receipt_number)}
+                </td>
+
+                <td>
+                    ${escapeHtml(paymentDate)}
+                </td>
+
+                <td>
+                    ${escapeHtml(payment.payment_mode_display || payment.payment_mode)}
+                </td>
+
+                <td class="text-end fw-semibold">
+                    ${money(payment.amount)}
+                </td>
+
+                <td>
+                    ${escapeHtml(payment.transaction_reference || "-")}
+                </td>
+
+                <td>
+                    ${escapeHtml(payment.received_by_name || "-")}
+                </td>
+
+                <td>
+                    <span class="badge bg-${statusClass}">
+                        ${escapeHtml(payment.payment_status_display || payment.payment_status)}
+                    </span>
+                </td>
+
+                <td>
+                    ${receiptButton}
+                </td>
+
+            </tr>
+
+        `);
+
+    });
+
+}
+
+
+// Open payment modal
+$("#recordPaymentButton").on("click", function () {
+
+    $("#paymentModalMessage").empty();
+
+    $("#paymentAmount").val("");
+
+    $("#paymentMode").val("");
+
+    $("#paymentTransactionReference").val("");
+
+    $("#paymentNotes").val("");
+
+    $("#paymentOutstandingBalance").val(
+        money(currentPaymentSummary.balance_amount)
+    );
+
+    recordPaymentModal.show();
+
+});
+
+
+// Save payment
+$("#savePaymentButton").on("click", function () {
+
+    const amount = Number($("#paymentAmount").val());
+
+    const paymentMode = $("#paymentMode").val();
+
+    const balance = Number(
+        currentPaymentSummary.balance_amount
+    );
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+
+        showPaymentMessage(
+            "Please enter a valid payment amount."
+        );
+
+        return;
+
+    }
+
+    if (!paymentMode) {
+
+        showPaymentMessage(
+            "Please select a payment mode."
+        );
+
+        return;
+
+    }
+
+    if (amount > balance) {
+
+        showPaymentMessage(
+            "Payment cannot exceed the outstanding balance."
+        );
+
+        return;
+
+    }
+
+    const payload = {
+
+        amount: amount.toFixed(2),
+
+        payment_mode: paymentMode,
+
+        transaction_reference:
+            $("#paymentTransactionReference").val().trim(),
+
+        notes:
+            $("#paymentNotes").val().trim()
+
+    };
+
+    const button = $("#savePaymentButton");
+
+    button.prop("disabled", true).text("Saving...");
+
+    $.ajax({
+
+        url: PAYMENT_API,
+
+        type: "POST",
+
+        contentType: "application/json",
+
+        headers: {
+            "X-CSRFToken": getCSRFToken()
+        },
+
+        data: JSON.stringify(payload),
+
+        success: function (response) {
+
+            recordPaymentModal.hide();
+
+            showSuccess(
+                `Payment recorded successfully. Receipt: ${response.payment.receipt_number}`
+            );
+
+            loadPaymentHistory();
+
+        },
+
+        error: function (xhr) {
+
+            const response = xhr.responseJSON || {};
+
+            let message =
+                response.amount ||
+                response.visit ||
+                response.detail ||
+                "Unable to record payment.";
+
+            if (typeof message !== "string") {
+                message = JSON.stringify(message);
+            }
+
+            showPaymentMessage(message);
+
+        },
+
+        complete: function () {
+
+            button.prop("disabled", false)
+                .text("Save Payment");
+
+        }
+
+    });
+
+});
+
+
+// Print receipt
+$(document).on("click", ".print-receipt", function () {
+
+    const paymentId = Number(
+        $(this).data("payment-id")
+    );
+
+    const payment = currentPayments.find(
+        item => Number(item.id) === paymentId
+    );
+
+    if (!payment) {
+
+        showError("Payment receipt not found.");
+
+        return;
+
+    }
+
+    const receiptWindow = window.open(
+        "",
+        "_blank",
+        "width=800,height=700"
+    );
+
+    if (!receiptWindow) {
+
+        showError(
+            "Please allow pop-ups to print the receipt."
+        );
+
+        return;
+
+    }
+
+    const receiptHTML = `
+
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Payment Receipt</title>
+
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    padding: 35px;
+                    color: #222;
+                }
+
+                .receipt {
+                    max-width: 650px;
+                    margin: auto;
+                    border: 1px solid #ddd;
+                    padding: 30px;
+                }
+
+                h2 {
+                    text-align: center;
+                }
+
+                .line {
+                    border-top: 1px solid #ddd;
+                    margin: 20px 0;
+                }
+
+                .row {
+                    display: flex;
+                    justify-content: space-between;
+                    margin: 12px 0;
+                    gap: 20px;
+                }
+
+                .amount {
+                    font-size: 24px;
+                    font-weight: bold;
+                }
+
+                .footer {
+                    text-align: center;
+                    margin-top: 35px;
+                    color: #666;
+                }
+
+                @media print {
+                    button {
+                        display: none;
+                    }
+                }
+            </style>
+
+        </head>
+
+        <body>
+
+            <div class="receipt">
+
+                <h2>PAYMENT RECEIPT</h2>
+
+                <div class="line"></div>
+
+                <div class="row">
+                    <strong>Receipt Number</strong>
+                    <span>${escapeHtml(payment.receipt_number)}</span>
+                </div>
+
+                <div class="row">
+                    <strong>Visit Number</strong>
+                    <span>${escapeHtml(currentVisit.visit_number)}</span>
+                </div>
+
+                <div class="row">
+                    <strong>Customer</strong>
+                    <span>${escapeHtml(currentVisit.customer_name)}</span>
+                </div>
+
+                <div class="row">
+                    <strong>Payment Date</strong>
+                    <span>${escapeHtml(payment.payment_date)}</span>
+                </div>
+
+                <div class="row">
+                    <strong>Payment Mode</strong>
+                    <span>${escapeHtml(payment.payment_mode_display || payment.payment_mode)}</span>
+                </div>
+
+                <div class="row">
+                    <strong>Transaction Reference</strong>
+                    <span>${escapeHtml(payment.transaction_reference || "-")}</span>
+                </div>
+
+                <div class="line"></div>
+
+                <div class="row">
+                    <strong>Amount Received</strong>
+                    <span class="amount">${money(payment.amount)}</span>
+                </div>
+
+                <div class="row">
+                    <strong>Status</strong>
+                    <span>${escapeHtml(payment.payment_status_display || payment.payment_status)}</span>
+                </div>
+
+                <div class="row">
+                    <strong>Received By</strong>
+                    <span>${escapeHtml(payment.received_by_name || "-")}</span>
+                </div>
+
+                <div class="line"></div>
+
+                <div class="footer">
+                    Thank you for your payment.
+                </div>
+
+                <div style="text-align:center; margin-top:20px;">
+                    <button onclick="window.print()">Print Receipt</button>
+                </div>
+
+            </div>
+
+        </body>
+        </html>
+
+    `;
+
+    receiptWindow.document.open();
+
+    receiptWindow.document.write(receiptHTML);
+
+    receiptWindow.document.close();
+
+});
+
+
 
     // Open Edit modal
     $(document).on(
@@ -1338,6 +2056,92 @@ $(document).ready(function () {
     );
 
 
+    // =====================================================
+    // CONFIRM SALE
+    // =====================================================
+
+    $("#confirmSaleButton").on("click", function () {
+
+        if (!currentVisit) {
+            showError("Visit details are not available.");
+            return;
+        }
+
+        if (currentVisit.status !== "DRAFT") {
+            showError("Only draft sales visits can be confirmed.");
+            return;
+        }
+
+        if (!currentVisit.sale_items || !currentVisit.sale_items.length) {
+            showError("Please add at least one product before confirming.");
+            return;
+        }
+
+        const confirmed = window.confirm(
+            "Are you sure you want to confirm this sale?\n\n" +
+            "After confirmation:\n" +
+            "- Inventory stock will be deducted.\n" +
+            "- Selected machines will be assigned to the customer.\n" +
+            "- This visit will be marked as completed.\n\n" +
+            "This action cannot be undone from this screen."
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        const button = $("#confirmSaleButton");
+
+        button.prop("disabled", true)
+              .html('<span class="spinner-border spinner-border-sm me-1"></span> Confirming...');
+
+        $.ajax({
+
+            url: CONFIRM_SALE_API,
+
+            type: "POST",
+
+            headers: {
+                "X-CSRFToken": getCSRFToken()
+            },
+
+            success: function (response) {
+
+                showSuccess(
+                    response.message || "Sale confirmed successfully."
+                );
+
+                // Reload visit details to show COMPLETED status.
+                loadSalesVisitDetails();
+
+            },
+
+            error: function (xhr) {
+
+                const response = xhr.responseJSON || {};
+
+                const message =
+                    response.detail ||
+                    response.message ||
+                    JSON.stringify(response) ||
+                    "Unable to confirm sale.";
+
+                showError(message);
+
+            },
+
+            complete: function () {
+
+                button.prop("disabled", false)
+                      .html('<i class="bi bi-check-circle"></i> Confirm Sale');
+
+            }
+
+        });
+
+    });
+
+
 
     // =====================================================
     // RENDER SALES VISIT DETAILS
@@ -1347,6 +2151,7 @@ $(document).ready(function () {
 
         // Keep latest visit data available for Edit and Remove.
         currentVisit = visit;
+        const isDraft = visit.status === "DRAFT";
 
 
         $("#visitNumber").text(
@@ -1476,10 +2281,7 @@ $(document).ready(function () {
             `);
 
         } else {
-
-
-            const isDraft = visit.status === "DRAFT";
-
+            
 
             items.forEach(function (item) {
 
@@ -1578,14 +2380,22 @@ $(document).ready(function () {
 
 
 
-        // Add Product button only for Draft visits
+        // Draft-only actions
         if (isDraft) {
 
             $("#addProductButton").show();
 
+            // Confirm only when at least one product exists.
+            if (items.length > 0) {
+                $("#confirmSaleButton").show();
+            } else {
+                $("#confirmSaleButton").hide();
+            }
+
         } else {
 
             $("#addProductButton").hide();
+            $("#confirmSaleButton").hide();
 
         }
 
@@ -1609,6 +2419,8 @@ $(document).ready(function () {
             success: function (visit) {
 
                 renderVisit(visit);
+
+                loadPaymentHistory();
 
             },
 

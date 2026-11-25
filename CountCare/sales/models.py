@@ -966,3 +966,236 @@ class VisitSaleItemMachine(models.Model):
     def __str__(self):
         return f"{self.sale_item} - {self.machine.serial_number}"
 
+
+
+class SalesInvoice(models.Model):
+
+    class SupplyType(models.TextChoices):
+        INTRA_STATE = "INTRA_STATE", "Intra-state"
+        INTER_STATE = "INTER_STATE", "Inter-state"
+
+    company = models.ForeignKey(
+        "accounts.Company",
+        on_delete=models.PROTECT,
+        related_name="sales_invoices",
+    )
+
+    visit = models.OneToOneField(
+        "sales.CustomerVisit",
+        on_delete=models.PROTECT,
+        related_name="invoice",
+    )
+
+    invoice_number = models.CharField(
+        max_length=50,
+    )
+
+    financial_year = models.CharField(
+        max_length=9,
+    )
+
+    sequence_number = models.PositiveIntegerField()
+
+    invoice_date = models.DateField()
+
+    supply_type = models.CharField(
+        max_length=20,
+        choices=SupplyType.choices,
+    )
+
+    place_of_supply_state = models.CharField(
+        max_length=100,
+    )
+
+    # Permanent seller and buyer snapshots.
+    seller_snapshot = models.JSONField(default=dict)
+
+    buyer_snapshot = models.JSONField(default=dict)
+
+    # Invoice totals
+    total_taxable_value = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+    )
+
+    total_cgst = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+    )
+
+    total_sgst = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+    )
+
+    total_igst = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+    )
+
+    total_discount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+    )
+
+    grand_total = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sales_invoices_created",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "sales_invoices"
+        ordering = ["-invoice_date", "-id"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "invoice_number"],
+                name="unique_invoice_number_per_company",
+            ),
+            models.UniqueConstraint(
+                fields=["company", "financial_year", "sequence_number"],
+                name="unique_invoice_sequence_per_fy",
+            ),
+        ]
+
+    def __str__(self):
+        return self.invoice_number
+
+
+class SalesInvoiceItem(models.Model):
+
+    invoice = models.ForeignKey(
+        SalesInvoice,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+
+    sale_item = models.ForeignKey(
+        "sales.VisitSaleItem",
+        on_delete=models.PROTECT,
+        related_name="invoice_items",
+    )
+
+    # Product snapshots
+    product_name = models.CharField(max_length=255)
+
+    brand = models.CharField(
+        max_length=150,
+        blank=True,
+    )
+
+    model_number = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    sku = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    hsn_code = models.CharField(
+        max_length=50,
+        blank=True,
+    )
+
+    serial_numbers = models.JSONField(default=list)
+
+    quantity = models.PositiveIntegerField()
+
+    unit_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    discount_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+    )
+
+    taxable_value = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+    )
+
+    gst_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+    )
+
+    cgst_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+    )
+
+    cgst_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+    )
+
+    sgst_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+    )
+
+    sgst_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+    )
+
+    igst_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+    )
+
+    igst_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+    )
+
+    total_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "sales_invoice_items"
+        ordering = ["id"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["invoice", "sale_item"],
+                name="unique_sale_item_per_invoice",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.invoice.invoice_number} - {self.product_name}"
+

@@ -9,6 +9,7 @@ from sales.models import (
     InventoryStock,
     CustomerMachine,
     StockMovement,
+    VisitPayment
 )
 
 from customers.models import Customer, CustomerAddress
@@ -973,3 +974,77 @@ class UpdateSaleItemSerializer(serializers.Serializer):
         )
 
         return instance
+
+
+
+class VisitPaymentSerializer(serializers.ModelSerializer):
+
+    received_by_name = serializers.SerializerMethodField()
+    payment_mode_display = serializers.CharField(
+        source="get_payment_mode_display",
+        read_only=True,
+    )
+    payment_status_display = serializers.CharField(
+        source="get_payment_status_display",
+        read_only=True,
+    )
+
+    class Meta:
+        model = VisitPayment
+        fields = [
+            "id",
+            "receipt_number",
+            "amount",
+            "payment_mode",
+            "payment_mode_display",
+            "payment_status",
+            "payment_status_display",
+            "transaction_reference",
+            "payment_date",
+            "received_by",
+            "received_by_name",
+            "notes",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "receipt_number",
+            "payment_status",
+            "received_by",
+            "received_by_name",
+            "created_at",
+        ]
+
+    def get_received_by_name(self, obj):
+        if not obj.received_by:
+            return "-"
+
+        return (
+            obj.received_by.get_full_name()
+            or obj.received_by.username
+        )
+
+
+class CreateVisitPaymentSerializer(serializers.Serializer):
+
+    amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=0.01,
+    )
+
+    payment_mode = serializers.ChoiceField(
+        choices=VisitPayment.PaymentMode.choices,
+    )
+
+    transaction_reference = serializers.CharField(
+        max_length=150,
+        required=False,
+        allow_blank=True,
+    )
+
+    notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+

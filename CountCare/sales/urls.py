@@ -27,7 +27,9 @@ from sales.views import (
     SalesVisitDetailAPIView,
     AvailableSaleProductsAPIView,
     AddSaleItemAPIView,
-    SaleItemDetailAPIView
+    SaleItemDetailAPIView,
+    ConfirmSalesVisitAPIView,
+    VisitPaymentAPIView
 )
 
 
@@ -179,4 +181,17 @@ urlpatterns = [
         SaleItemDetailAPIView.as_view(),
         name="sales-sale-item-detail",
     ),
+
+    path(
+        "visits/<int:pk>/confirm/",
+        ConfirmSalesVisitAPIView.as_view(),
+        name="sales-confirm-visit",
+    ),
+
+    path(
+        "visits/<int:pk>/payments/",
+        VisitPaymentAPIView.as_view(),
+        name="sales-visit-payments",
+    ),
 ]
+
