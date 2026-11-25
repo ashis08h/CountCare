@@ -9,7 +9,9 @@ from sales.models import (
     InventoryStock,
     CustomerMachine,
     StockMovement,
-    VisitPayment
+    VisitPayment,
+    SalesInvoice,
+    SalesInvoiceItem,
 )
 
 from customers.models import Customer, CustomerAddress
@@ -1047,4 +1049,64 @@ class CreateVisitPaymentSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
     )
+
+
+
+class SalesInvoiceItemSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = SalesInvoiceItem
+        fields = [
+            "id",
+            "product_name",
+            "brand",
+            "model_number",
+            "sku",
+            "hsn_code",
+            "serial_numbers",
+            "quantity",
+            "unit_price",
+            "discount_amount",
+            "taxable_value",
+            "gst_rate",
+            "cgst_rate",
+            "cgst_amount",
+            "sgst_rate",
+            "sgst_amount",
+            "igst_rate",
+            "igst_amount",
+            "total_amount",
+        ]
+        read_only_fields = fields
+
+
+class SalesInvoiceDetailSerializer(serializers.ModelSerializer):
+
+    items = SalesInvoiceItemSerializer(
+        many=True,
+        read_only=True,
+    )
+
+    class Meta:
+        model = SalesInvoice
+        fields = [
+            "id",
+            "invoice_number",
+            "financial_year",
+            "sequence_number",
+            "invoice_date",
+            "supply_type",
+            "place_of_supply_state",
+            "seller_snapshot",
+            "buyer_snapshot",
+            "total_taxable_value",
+            "total_cgst",
+            "total_sgst",
+            "total_igst",
+            "total_discount",
+            "grand_total",
+            "items",
+            "created_at",
+        ]
+        read_only_fields = fields
 

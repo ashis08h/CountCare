@@ -47,7 +47,8 @@ from sales.models import (
     VisitSaleItem,
     VisitSaleItemMachine,
     InventoryStock,
-    VisitPayment
+    VisitPayment,
+    SalesInvoice
 )
 
 from decimal import Decimal
@@ -73,6 +74,7 @@ from sales.serializers import (
     UpdateSaleItemSerializer,
     VisitPaymentSerializer,
     CreateVisitPaymentSerializer,
+    SalesInvoiceDetailSerializer
 )
 
 from sales.services.inventory_service import (
@@ -88,6 +90,7 @@ from customers.models import Customer
 from sales.models import CustomerVisit
 from django.db.models import Q
 from django.utils.dateparse import parse_date
+from sales.services.invoice_service import create_invoice_for_visit
 
 # =========================================================
 # INVENTORY API PERMISSION MIXIN
@@ -1354,16 +1357,33 @@ class ConfirmSalesVisitAPIView(InventoryPermissionMixin, APIView):
         visit.status = CustomerVisit.VisitStatus.COMPLETED
         visit.save(update_fields=["status", "updated_at"])
 
+        # Generate GST invoice within the same transaction.
+        invoice = create_invoice_for_visit(
+            visit=visit,
+            user=request.user,
+        )
+
         visit.refresh_from_db()
 
         return Response(
             {
-                "message": "Sale confirmed successfully.",
+                "message": "Sale confirmed and GST invoice generated successfully.",
                 "visit": SalesVisitDetailSerializer(visit).data,
+                "invoice": {
+                    "id": invoice.id,
+                    "invoice_number": invoice.invoice_number,
+                    "invoice_date": invoice.invoice_date,
+                    "supply_type": invoice.supply_type,
+                    "total_taxable_value": str(invoice.total_taxable_value),
+                    "total_cgst": str(invoice.total_cgst),
+                    "total_sgst": str(invoice.total_sgst),
+                    "total_igst": str(invoice.total_igst),
+                    "total_discount": str(invoice.total_discount),
+                    "grand_total": str(invoice.grand_total),
+                },
             },
             status=status.HTTP_200_OK,
         )
-
 
 
 class VisitPaymentAPIView(InventoryPermissionMixin, APIView):
@@ -1489,3 +1509,29 @@ class VisitPaymentAPIView(InventoryPermissionMixin, APIView):
             "payment": VisitPaymentSerializer(payment).data,
             "summary": updated_summary,
         }, status=status.HTTP_201_CREATED)
+
+
+
+class SalesInvoiceDetailAPIView(
+    InventoryPermissionMixin,
+    APIView,
+):
+    permission_map = {
+        "GET": "sales_view",
+    }
+
+    def get(self, request, pk):
+        company = self.get_company()
+
+        invoice = get_object_or_404(
+            SalesInvoice.objects
+            .filter(
+                company=company,
+                visit_id=pk,
+            )
+            .prefetch_related("items"),
+        )
+
+        serializer = SalesInvoiceDetailSerializer(invoice)
+
+        return Response(serializer.data)
