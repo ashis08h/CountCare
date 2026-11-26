@@ -28,7 +28,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 # --------------------------------------------------
 
 DEFAULT_MODULES = [
-    "dashboard",
+     "dashboard",
     "customers",
     "products",
     "inventory",
@@ -38,6 +38,7 @@ DEFAULT_MODULES = [
     "reports",
     "employees",
     "company",
+    "email_marketing",
 ]
 
 DEFAULT_ACTIONS = [

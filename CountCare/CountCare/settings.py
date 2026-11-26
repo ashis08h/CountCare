@@ -41,7 +41,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'django_filters',
     'accounts',
-    'sales'
+    'sales',
+    'email_marketing'
 ]
 
 MIDDLEWARE = [

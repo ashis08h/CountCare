@@ -49,5 +49,10 @@ urlpatterns += [
     path("accounts/", include("accounts.urls")),
     path("api/sales/", include("sales.urls")),
 
+    path(
+        "api/email-marketing/",
+        include("email_marketing.urls"),
+    ),
+
 ]
 
