@@ -169,3 +169,7 @@ LOGIN_REDIRECT_URL = "/api/dashboard/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 
+# Email configuration - development
+DEFAULT_FROM_EMAIL = "CashCount <noreply@cashcount.local>"
+
+
